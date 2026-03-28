@@ -170,6 +170,65 @@ func TestDeletePaper(t *testing.T) {
 	})
 }
 
+func TestServePDF(t *testing.T) {
+	t.Run("serves PDF for existing paper", func(t *testing.T) {
+		mux, tdb, storage := testMux(t)
+
+		pdfContent := []byte("%PDF-1.4 test content for serving")
+
+		p := store.Paper{ID: "p1", Title: "Serve Test", FilePath: storage.Path("p1"), FileSize: int64(len(pdfContent)), CreatedAt: "2026-03-28T00:00:00Z"}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		// Write the PDF file to storage
+		require.NoError(t, os.MkdirAll(filepath.Dir(storage.Path("p1")), 0o755))
+		require.NoError(t, os.WriteFile(storage.Path("p1"), pdfContent, 0o644))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/papers/p1/pdf", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "application/pdf", rec.Header().Get("Content-Type"))
+		assert.Equal(t, "inline", rec.Header().Get("Content-Disposition"))
+		assert.Equal(t, pdfContent, rec.Body.Bytes())
+	})
+
+	t.Run("returns 404 for non-existent paper", func(t *testing.T) {
+		mux, _, _ := testMux(t)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/papers/missing/pdf", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		var body map[string]string
+		err := json.NewDecoder(rec.Body).Decode(&body)
+		require.NoError(t, err)
+		assert.Contains(t, body["error"], "not found")
+	})
+
+	t.Run("returns 404 when paper exists but file missing on disk", func(t *testing.T) {
+		mux, tdb, storage := testMux(t)
+
+		p := store.Paper{ID: "p2", Title: "No File", FilePath: storage.Path("p2"), FileSize: 100, CreatedAt: "2026-03-28T00:00:00Z"}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		// Do NOT create the file on disk
+
+		req := httptest.NewRequest(http.MethodGet, "/api/papers/p2/pdf", nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+
+		var body map[string]string
+		err := json.NewDecoder(rec.Body).Decode(&body)
+		require.NoError(t, err)
+		assert.Contains(t, body["error"], "not found")
+	})
+}
+
 func TestUploadPaper(t *testing.T) {
 	t.Run("valid PDF returns 201 with paper", func(t *testing.T) {
 		mux, _, _ := testMux(t)

@@ -14,6 +14,7 @@ func NewMux(db *sql.DB, storage *pdf.Storage) *http.ServeMux {
 	mux.HandleFunc("GET /api/papers", handleListPapers(db))
 	mux.HandleFunc("POST /api/papers", handleUploadPaper(db, storage))
 	mux.HandleFunc("GET /api/papers/{id}", handleGetPaper(db))
+	mux.HandleFunc("GET /api/papers/{id}/pdf", handleServePDF(db, storage))
 	mux.HandleFunc("DELETE /api/papers/{id}", handleDeletePaper(db, storage))
 	return mux
 }

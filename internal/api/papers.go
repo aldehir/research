@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -98,6 +99,37 @@ func handleUploadPaper(db *sql.DB, storage *pdf.Storage) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusCreated, paper)
+	}
+}
+
+func handleServePDF(db *sql.DB, storage *pdf.Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		_, err := store.GetPaper(db, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "paper not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to get paper")
+			return
+		}
+
+		path := storage.Path(id)
+		f, err := os.Open(path)
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "file not found")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to open file")
+			return
+		}
+		defer f.Close()
+
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", "inline")
+		io.Copy(w, f)
 	}
 }
 

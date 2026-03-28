@@ -21,7 +21,7 @@
 - [x] 02 — Database Setup `COMPLETE`
 - [ ] 03 — Papers CRUD API `IN PROGRESS`
 - [x] 04 — PDF Upload & Storage `COMPLETE`
-- [ ] 05 — PDF Serving `TODO`
+- [x] 05 — PDF Serving `COMPLETE`
 - [ ] 06 — Frontend: Paper Library `TODO`
 - [ ] 07 — Frontend: PDF Viewer `TODO`
 - [ ] 08 — Text Selection & Context `TODO`
