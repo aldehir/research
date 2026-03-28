@@ -3,7 +3,7 @@
 	import PdfViewer from '$lib/PdfViewer.svelte';
 	import UploadZone from '$lib/UploadZone.svelte';
 	import ChatPanel from '$lib/ChatPanel.svelte';
-	import { loadPapers, getSelectedPaper, upload } from '$lib/papers.svelte';
+	import { papersStore } from '$lib/papers.svelte';
 	import { onMount } from 'svelte';
 
 	let fileInput = $state<HTMLInputElement | null>(null);
@@ -11,7 +11,7 @@
 	let uploadError = $state<string | null>(null);
 
 	onMount(() => {
-		loadPapers();
+		papersStore.load().catch(e => console.error('Failed to load papers:', e));
 	});
 
 	async function handleHeaderUpload(event: Event) {
@@ -26,7 +26,7 @@
 		uploadError = null;
 		uploading = true;
 		try {
-			await upload(file);
+			await papersStore.upload(file);
 		} catch (e) {
 			uploadError = e instanceof Error ? e.message : 'Upload failed';
 		} finally {
@@ -66,14 +66,14 @@
 			<UploadZone />
 		</aside>
 		<main class="content">
-			{#if getSelectedPaper()}
-				<PdfViewer paperId={getSelectedPaper()!.id} />
+			{#if papersStore.selectedPaper}
+				<PdfViewer paperId={papersStore.selectedPaper.id} />
 			{:else}
 				<p class="placeholder">Select a paper to view</p>
 			{/if}
 		</main>
-		{#if getSelectedPaper()}
-			<ChatPanel paperId={getSelectedPaper()!.id} />
+		{#if papersStore.selectedPaper}
+			<ChatPanel paperId={papersStore.selectedPaper.id} />
 		{/if}
 	</div>
 </div>

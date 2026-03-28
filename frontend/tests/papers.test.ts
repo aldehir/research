@@ -1,13 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as api from '$lib/api';
-import {
-	getPapers,
-	getSelectedPaper,
-	loadPapers,
-	selectPaper,
-	upload,
-	remove
-} from '$lib/papers.svelte';
+import { papersStore } from '$lib/papers.svelte';
 
 vi.mock('$lib/api', () => ({
 	listPapers: vi.fn(),
@@ -39,32 +32,32 @@ beforeEach(() => {
 
 describe('paper store', () => {
 	it('starts with empty papers', () => {
-		expect(getPapers()).toEqual([]);
+		expect(papersStore.papers).toEqual([]);
 	});
 
 	it('loads papers from API', async () => {
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper, mockPaper2]);
 
-		await loadPapers();
+		await papersStore.load();
 
 		expect(api.listPapers).toHaveBeenCalled();
-		expect(getPapers()).toEqual([mockPaper, mockPaper2]);
+		expect(papersStore.papers).toEqual([mockPaper, mockPaper2]);
 	});
 
 	it('selects a paper by id', async () => {
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper, mockPaper2]);
-		await loadPapers();
+		await papersStore.load();
 
-		selectPaper(mockPaper2.id);
+		papersStore.select(mockPaper2.id);
 
-		expect(getSelectedPaper()).toEqual(mockPaper2);
+		expect(papersStore.selectedPaper).toEqual(mockPaper2);
 	});
 
 	it('returns null when no paper is selected', async () => {
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper]);
-		await loadPapers();
+		await papersStore.load();
 
-		expect(getSelectedPaper()).toBeNull();
+		expect(papersStore.selectedPaper).toBeNull();
 	});
 
 	it('uploads a paper and refreshes list', async () => {
@@ -72,37 +65,37 @@ describe('paper store', () => {
 		vi.mocked(api.uploadPaper).mockResolvedValue(mockPaper);
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper]);
 
-		await upload(file);
+		await papersStore.upload(file);
 
 		expect(api.uploadPaper).toHaveBeenCalledWith(file);
 		expect(api.listPapers).toHaveBeenCalled();
-		expect(getPapers()).toEqual([mockPaper]);
+		expect(papersStore.papers).toEqual([mockPaper]);
 	});
 
 	it('removes a paper and refreshes list', async () => {
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper, mockPaper2]);
-		await loadPapers();
+		await papersStore.load();
 
 		vi.mocked(api.deletePaper).mockResolvedValue(undefined);
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper2]);
 
-		await remove(mockPaper.id);
+		await papersStore.remove(mockPaper.id);
 
 		expect(api.deletePaper).toHaveBeenCalledWith(mockPaper.id);
-		expect(getPapers()).toEqual([mockPaper2]);
+		expect(papersStore.papers).toEqual([mockPaper2]);
 	});
 
 	it('clears selection when selected paper is removed', async () => {
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper, mockPaper2]);
-		await loadPapers();
-		selectPaper(mockPaper.id);
-		expect(getSelectedPaper()).toEqual(mockPaper);
+		await papersStore.load();
+		papersStore.select(mockPaper.id);
+		expect(papersStore.selectedPaper).toEqual(mockPaper);
 
 		vi.mocked(api.deletePaper).mockResolvedValue(undefined);
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper2]);
 
-		await remove(mockPaper.id);
+		await papersStore.remove(mockPaper.id);
 
-		expect(getSelectedPaper()).toBeNull();
+		expect(papersStore.selectedPaper).toBeNull();
 	});
 });

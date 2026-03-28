@@ -1,36 +1,34 @@
 import { listPapers, uploadPaper, deletePaper } from '$lib/api';
 import type { Paper } from '$lib/api';
 
-let papers = $state<Paper[]>([]);
-let selectedPaperId = $state<string | null>(null);
+class PapersStore {
+	papers = $state<Paper[]>([]);
+	selectedId = $state<string | null>(null);
 
-const selectedPaper = $derived(papers.find(p => p.id === selectedPaperId) ?? null);
-
-export async function loadPapers(): Promise<void> {
-	papers = await listPapers();
-}
-
-export function selectPaper(id: string): void {
-	selectedPaperId = id;
-}
-
-export async function upload(file: File): Promise<void> {
-	await uploadPaper(file);
-	await loadPapers();
-}
-
-export async function remove(id: string): Promise<void> {
-	await deletePaper(id);
-	if (selectedPaperId === id) {
-		selectedPaperId = null;
+	get selectedPaper(): Paper | null {
+		return this.papers.find(p => p.id === this.selectedId) ?? null;
 	}
-	await loadPapers();
+
+	async load(): Promise<void> {
+		this.papers = await listPapers();
+	}
+
+	select(id: string): void {
+		this.selectedId = id;
+	}
+
+	async upload(file: File): Promise<void> {
+		await uploadPaper(file);
+		await this.load();
+	}
+
+	async remove(id: string): Promise<void> {
+		await deletePaper(id);
+		if (this.selectedId === id) {
+			this.selectedId = null;
+		}
+		await this.load();
+	}
 }
 
-export function getPapers(): Paper[] {
-	return papers;
-}
-
-export function getSelectedPaper(): Paper | null {
-	return selectedPaper;
-}
+export const papersStore = new PapersStore();

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { upload } from '$lib/papers.svelte';
+	import { papersStore } from '$lib/papers.svelte';
 
 	let dragOver = $state(false);
 	let uploading = $state(false);
@@ -14,7 +14,7 @@
 		error = null;
 		uploading = true;
 		try {
-			await upload(file);
+			await papersStore.upload(file);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Upload failed';
 		} finally {

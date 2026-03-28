@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getPapers, getSelectedPaper, selectPaper, remove } from '$lib/papers.svelte';
+	import { papersStore } from '$lib/papers.svelte';
 	import type { Paper } from '$lib/api';
 
 	function formatDate(iso: string): string {
@@ -17,27 +17,27 @@
 	}
 
 	function handleSelect(paper: Paper) {
-		selectPaper(paper.id);
+		papersStore.select(paper.id);
 	}
 
 	async function handleDelete(event: Event, paper: Paper) {
 		event.stopPropagation();
 		if (window.confirm(`Delete "${paper.title}"?`)) {
-			await remove(paper.id);
+			await papersStore.remove(paper.id);
 		}
 	}
 </script>
 
 <div class="paper-list">
-	{#if getPapers().length === 0}
+	{#if papersStore.papers.length === 0}
 		<p class="empty">No papers uploaded</p>
 	{:else}
 		<ul>
-			{#each getPapers() as paper (paper.id)}
+			{#each papersStore.papers as paper (paper.id)}
 				<li>
 					<button
 						class="paper-item"
-						class:selected={getSelectedPaper()?.id === paper.id}
+						class:selected={papersStore.selectedPaper?.id === paper.id}
 						onclick={() => handleSelect(paper)}
 					>
 						<span class="paper-title">{paper.title}</span>
