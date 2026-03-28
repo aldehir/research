@@ -42,7 +42,8 @@ describe('sendChatMessage', () => {
 			expect.any(Function),
 			expect.any(Function),
 			expect.any(Function),
-			{ selectedText: 'quoted text', surroundingText: 'page content' }
+			{ selectedText: 'quoted text', surroundingText: 'page content' },
+			expect.any(Function)
 		);
 	});
 
@@ -60,11 +61,12 @@ describe('sendChatMessage', () => {
 			expect.any(Function),
 			expect.any(Function),
 			expect.any(Function),
-			undefined
+			undefined,
+			expect.any(Function)
 		);
 	});
 
-	it('includes selected_text on user message when provided', async () => {
+	it('does not include selected_text on user message (system-prompt-only context)', async () => {
 		vi.mocked(sendMessage).mockImplementation(
 			async (_p, _c, _content, _onDelta, onDone) => { onDone(); }
 		);
@@ -74,11 +76,10 @@ describe('sendChatMessage', () => {
 			surroundingText: 'page content'
 		});
 
-		// Verify the user message was created with selected_text
 		const { getMessages } = await import('$lib/chat.svelte');
 		const messages = getMessages();
 		const userMsg = messages.find(m => m.role === 'user');
 		expect(userMsg).toBeDefined();
-		expect(userMsg!.selected_text).toBe('quoted text');
+		expect(userMsg!.selected_text).toBeUndefined();
 	});
 });

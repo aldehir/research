@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aldehir/research/internal/anthropic"
+	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
 )
 
@@ -21,8 +22,11 @@ type ChatStreamer interface {
 	Stream(ctx context.Context, req anthropic.Request) (<-chan anthropic.StreamEvent, error)
 }
 
-func handleSendMessage(db *sql.DB, chat ChatStreamer, logger *slog.Logger) http.HandlerFunc {
+const maxToolLoopIterations = 10
+
+func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		paperID := r.PathValue("id")
 		chatID := r.PathValue("chatId")
 
 		// Check if chat streamer is available
@@ -36,6 +40,7 @@ func handleSendMessage(db *sql.DB, chat ChatStreamer, logger *slog.Logger) http.
 			Content         string `json:"content"`
 			SelectedText    string `json:"selected_text"`
 			SurroundingText string `json:"surrounding_text"`
+			CurrentPage     int    `json:"current_page"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body", logger)
@@ -104,11 +109,34 @@ func handleSendMessage(db *sql.DB, chat ChatStreamer, logger *slog.Logger) http.
 			})
 		}
 
+		// Look up paper metadata for prompt context
+		var docTitle, docAuthor, docDate, pdfPath string
+		var totalPages int
+		if paper, err := store.GetPaper(db, paperID); err == nil {
+			docTitle = paper.Title
+			pdfPath = storage.Path(paperID)
+			if paper.Author != nil {
+				docAuthor = *paper.Author
+			}
+			if paper.PublishedDate != nil {
+				docDate = *paper.PublishedDate
+			}
+			if paper.PageCount != nil {
+				totalPages = *paper.PageCount
+			}
+		}
+
 		// Build request
 		req := anthropic.Request{
 			Messages:        anthropicMessages,
 			SelectedText:    body.SelectedText,
 			SurroundingText: body.SurroundingText,
+			CurrentPage:     body.CurrentPage,
+			DocumentTitle:   docTitle,
+			DocumentAuthor:  docAuthor,
+			DocumentDate:    docDate,
+			TotalPages:      totalPages,
+			Tools:           anthropic.PDFTools(),
 		}
 
 		// Set SSE headers before calling Stream
@@ -116,36 +144,92 @@ func handleSendMessage(db *sql.DB, chat ChatStreamer, logger *slog.Logger) http.
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 
-		// Call stream
-		ch, err := chat.Stream(r.Context(), req)
-		if err != nil {
-			logger.Error("stream start failed", "chat_id", chatID, "error", err)
-			// Already set SSE headers, so send error as SSE event
-			fmt.Fprintf(w, "data: %s\n\n", mustJSON(sseResponse{Type: "error", Error: err.Error()}))
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-			return
-		}
-
-		// Stream events
 		flusher, _ := w.(http.Flusher)
-		var fullText strings.Builder
-
-		for ev := range ch {
-			switch ev.Type {
-			case "content_block_delta":
-				fullText.WriteString(ev.Text)
-				fmt.Fprintf(w, "data: %s\n\n", mustJSON(sseResponse{Type: "delta", Text: ev.Text}))
-			case "message_stop":
-				fmt.Fprintf(w, "data: %s\n\n", mustJSON(sseResponse{Type: "done"}))
-			}
+		flush := func() {
 			if flusher != nil {
 				flusher.Flush()
 			}
 		}
 
-		// Store assistant message
+		sendSSE := func(v any) {
+			fmt.Fprintf(w, "data: %s\n\n", mustJSON(v))
+			flush()
+		}
+
+		var fullText strings.Builder
+
+		// Tool execution loop
+		for i := 0; i < maxToolLoopIterations; i++ {
+			ch, err := chat.Stream(r.Context(), req)
+			if err != nil {
+				logger.Error("stream start failed", "chat_id", chatID, "error", err)
+				sendSSE(sseResponse{Type: "error", Error: err.Error()})
+				return
+			}
+
+			var toolCalls []anthropic.StreamEvent
+			for ev := range ch {
+				switch ev.Type {
+				case "content_block_delta":
+					fullText.WriteString(ev.Text)
+					sendSSE(sseResponse{Type: "delta", Text: ev.Text})
+				case "tool_use":
+					toolCalls = append(toolCalls, ev)
+				case "message_stop":
+					// Don't emit done yet if we have tool calls to process
+				}
+			}
+
+			if len(toolCalls) == 0 {
+				// No tool calls — we're done
+				sendSSE(sseResponse{Type: "done"})
+				break
+			}
+
+			// Process tool calls
+			// Build assistant message with tool_use blocks
+			var assistantBlocks []anthropic.ContentBlock
+			for _, tc := range toolCalls {
+				assistantBlocks = append(assistantBlocks, anthropic.ContentBlock{
+					Type:  "tool_use",
+					ID:    tc.ToolUseID,
+					Name:  tc.ToolName,
+					Input: json.RawMessage(tc.ToolInput),
+				})
+
+				// Send tool_call SSE to client for UI
+				sendSSE(sseToolCall{
+					Type: "tool_call",
+					Name: tc.ToolName,
+					Args: json.RawMessage(tc.ToolInput),
+				})
+			}
+
+			// Append assistant tool_use message
+			req.Messages = append(req.Messages, anthropic.Message{
+				Role:          "assistant",
+				ContentBlocks: assistantBlocks,
+			})
+
+			// Execute tools and build tool_result blocks
+			var resultBlocks []anthropic.ContentBlock
+			for _, tc := range toolCalls {
+				result := executeToolCall(tc.ToolName, tc.ToolInput, pdfPath, logger)
+				resultBlocks = append(resultBlocks, anthropic.ContentBlock{
+					Type:      "tool_result",
+					ToolUseID: tc.ToolUseID,
+					Content:   result,
+				})
+			}
+
+			// Append user message with tool_result blocks
+			req.Messages = append(req.Messages, anthropic.Message{
+				Role:          "user",
+				ContentBlocks: resultBlocks,
+			})
+		}
+
+		// Store assistant message (final text only)
 		assistantID, err := newUUID()
 		if err != nil {
 			return
@@ -165,6 +249,61 @@ type sseResponse struct {
 	Type  string `json:"type"`
 	Text  string `json:"text,omitempty"`
 	Error string `json:"error,omitempty"`
+}
+
+type sseToolCall struct {
+	Type string          `json:"type"`
+	Name string          `json:"name"`
+	Args json.RawMessage `json:"args"`
+}
+
+func executeToolCall(name, input, pdfPath string, logger *slog.Logger) string {
+	switch name {
+	case "search_pdf":
+		var args struct {
+			Query string `json:"query"`
+		}
+		if err := json.Unmarshal([]byte(input), &args); err != nil {
+			return fmt.Sprintf("Error parsing arguments: %v", err)
+		}
+		results, err := pdf.SearchText(pdfPath, args.Query)
+		if err != nil {
+			logger.Warn("search_pdf failed", "error", err)
+			return fmt.Sprintf("Error searching PDF: %v", err)
+		}
+		if len(results) == 0 {
+			return "No matches found."
+		}
+		b, _ := json.Marshal(results)
+		return string(b)
+
+	case "read_page":
+		var args struct {
+			Page int `json:"page"`
+		}
+		if err := json.Unmarshal([]byte(input), &args); err != nil {
+			return fmt.Sprintf("Error parsing arguments: %v", err)
+		}
+		text, err := pdf.ExtractPageText(pdfPath, args.Page)
+		if err != nil {
+			logger.Warn("read_page failed", "error", err)
+			return fmt.Sprintf("Error reading page: %v", err)
+		}
+		return text
+
+	case "go_to_page":
+		// Client-side tool — return success, the SSE event was already sent
+		var args struct {
+			Page int `json:"page"`
+		}
+		if err := json.Unmarshal([]byte(input), &args); err != nil {
+			return fmt.Sprintf("Error parsing arguments: %v", err)
+		}
+		return fmt.Sprintf("Navigated to page %d.", args.Page)
+
+	default:
+		return fmt.Sprintf("Unknown tool: %s", name)
+	}
 }
 
 func mustJSON(v any) string {

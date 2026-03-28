@@ -67,6 +67,7 @@ export interface Message {
 export interface MessageContext {
 	selectedText?: string;
 	surroundingText?: string;
+	currentPage?: number;
 }
 
 export interface ChatSessionWithMessages extends ChatSession {
@@ -106,6 +107,11 @@ export async function deleteChatSession(paperId: string, chatId: string): Promis
 	}
 }
 
+export interface ToolCall {
+	name: string;
+	args: Record<string, unknown>;
+}
+
 export async function sendMessage(
 	paperId: string,
 	chatId: string,
@@ -113,14 +119,18 @@ export async function sendMessage(
 	onDelta: (text: string) => void,
 	onDone: () => void,
 	onError: (error: string) => void,
-	context?: MessageContext
+	context?: MessageContext,
+	onToolCall?: (tool: ToolCall) => void
 ): Promise<void> {
-	const reqBody: Record<string, string> = { content };
+	const reqBody: Record<string, string | number> = { content };
 	if (context?.selectedText) {
 		reqBody.selected_text = context.selectedText;
 	}
 	if (context?.surroundingText) {
 		reqBody.surrounding_text = context.surroundingText;
+	}
+	if (context?.currentPage) {
+		reqBody.current_page = context.currentPage;
 	}
 
 	let response: Response;
@@ -157,9 +167,11 @@ export async function sendMessage(
 			for (const line of lines) {
 				if (!line.startsWith('data: ')) continue;
 				const json = line.slice(6);
-				const event = JSON.parse(json) as { type: string; text?: string };
+				const event = JSON.parse(json) as { type: string; text?: string; name?: string; args?: Record<string, unknown> };
 				if (event.type === 'delta' && event.text) {
 					onDelta(event.text);
+				} else if (event.type === 'tool_call' && onToolCall && event.name) {
+					onToolCall({ name: event.name, args: event.args ?? {} });
 				} else if (event.type === 'done') {
 					onDone();
 					return;

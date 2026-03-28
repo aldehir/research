@@ -21,9 +21,23 @@ type Client struct {
 	Logger     *slog.Logger
 }
 
+// ContentBlock represents a structured content block in a message.
+type ContentBlock struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+	Content   string          `json:"content,omitempty"`
+}
+
+// Message represents a chat message. Use Content for simple text messages
+// or ContentBlocks for structured content (tool_use, tool_result).
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role          string         `json:"-"`
+	Content       string         `json:"-"`
+	ContentBlocks []ContentBlock `json:"-"`
 }
 
 type Request struct {
@@ -31,12 +45,55 @@ type Request struct {
 	SystemPrompt    string
 	SelectedText    string
 	SurroundingText string
+	DocumentTitle   string
+	DocumentAuthor  string
+	DocumentDate    string
+	CurrentPage     int
+	TotalPages      int
+	Tools           []Tool
 }
 
 type StreamEvent struct {
-	Type  string
-	Text  string
-	Error string
+	Type      string
+	Text      string
+	Error     string
+	ToolUseID string
+	ToolName  string
+	ToolInput string
+}
+
+// MarshalJSON serializes a Message. Uses content blocks if present, otherwise plain text.
+func (m Message) MarshalJSON() ([]byte, error) {
+	if len(m.ContentBlocks) > 0 {
+		return json.Marshal(struct {
+			Role    string         `json:"role"`
+			Content []ContentBlock `json:"content"`
+		}{m.Role, m.ContentBlocks})
+	}
+	return json.Marshal(struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}{m.Role, m.Content})
+}
+
+// UnmarshalJSON deserializes a Message from JSON.
+func (m *Message) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	m.Role = raw.Role
+	// Try string first
+	var s string
+	if err := json.Unmarshal(raw.Content, &s); err == nil {
+		m.Content = s
+		return nil
+	}
+	// Otherwise try content blocks
+	return json.Unmarshal(raw.Content, &m.ContentBlocks)
 }
 
 type Option func(*Client)
@@ -76,16 +133,26 @@ type apiRequest struct {
 	Stream    bool      `json:"stream"`
 	System    string    `json:"system,omitempty"`
 	Messages  []Message `json:"messages"`
+	Tools     []Tool    `json:"tools,omitempty"`
 }
 
 type sseData struct {
-	Type  string   `json:"type"`
-	Delta sseDelta `json:"delta"`
+	Type         string          `json:"type"`
+	Index        int             `json:"index"`
+	Delta        sseDelta        `json:"delta"`
+	ContentBlock sseContentBlock `json:"content_block"`
 }
 
 type sseDelta struct {
+	Type        string `json:"type"`
+	Text        string `json:"text"`
+	PartialJSON string `json:"partial_json"`
+}
+
+type sseContentBlock struct {
 	Type string `json:"type"`
-	Text string `json:"text"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, error) {
@@ -93,7 +160,15 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 
 	systemPrompt := req.SystemPrompt
 	if systemPrompt == "" {
-		systemPrompt = BuildSystemPrompt(req.SelectedText, req.SurroundingText)
+		systemPrompt = BuildSystemPromptFromContext(PromptContext{
+			DocumentTitle:   req.DocumentTitle,
+			DocumentAuthor:  req.DocumentAuthor,
+			DocumentDate:    req.DocumentDate,
+			CurrentPage:     req.CurrentPage,
+			TotalPages:      req.TotalPages,
+			SelectedText:    req.SelectedText,
+			SurroundingText: req.SurroundingText,
+		})
 	}
 
 	body := apiRequest{
@@ -102,6 +177,7 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 		Stream:    true,
 		System:    systemPrompt,
 		Messages:  req.Messages,
+		Tools:     req.Tools,
 	}
 
 	bodyBytes, err := json.Marshal(body)
@@ -147,6 +223,14 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 func (c *Client) readSSE(ctx context.Context, resp *http.Response, ch chan<- StreamEvent) {
 	scanner := bufio.NewScanner(resp.Body)
 
+	// Track in-progress tool_use blocks by index
+	type toolBlock struct {
+		id    string
+		name  string
+		input strings.Builder
+	}
+	toolBlocks := make(map[int]*toolBlock)
+
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
@@ -166,18 +250,38 @@ func (c *Client) readSSE(ctx context.Context, resp *http.Response, ch chan<- Str
 			continue
 		}
 
-		ev := StreamEvent{Type: parsed.Type}
-
 		switch parsed.Type {
+		case "content_block_start":
+			if parsed.ContentBlock.Type == "tool_use" {
+				toolBlocks[parsed.Index] = &toolBlock{
+					id:   parsed.ContentBlock.ID,
+					name: parsed.ContentBlock.Name,
+				}
+			}
+
 		case "content_block_delta":
 			if parsed.Delta.Type == "text_delta" {
-				ev.Text = parsed.Delta.Text
+				ch <- StreamEvent{Type: "content_block_delta", Text: parsed.Delta.Text}
+			} else if parsed.Delta.Type == "input_json_delta" {
+				if tb, ok := toolBlocks[parsed.Index]; ok {
+					tb.input.WriteString(parsed.Delta.PartialJSON)
+				}
 			}
+
+		case "content_block_stop":
+			if tb, ok := toolBlocks[parsed.Index]; ok {
+				ch <- StreamEvent{
+					Type:      "tool_use",
+					ToolUseID: tb.id,
+					ToolName:  tb.name,
+					ToolInput: tb.input.String(),
+				}
+				delete(toolBlocks, parsed.Index)
+			}
+
 		case "message_stop":
-			ch <- ev
+			ch <- StreamEvent{Type: "message_stop"}
 			return
 		}
-
-		ch <- ev
 	}
 }

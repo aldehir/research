@@ -9,6 +9,7 @@
 	import { setPages, setCurrentPage, setSelectedText } from '$lib/pdf-context.svelte';
 	import { extractOutline, type TocEntry } from '$lib/pdf-outline';
 	import TocPanel from '$lib/TocPanel.svelte';
+	import { consumeNavigateTarget, getNavigateTarget } from '$lib/pdf-navigate.svelte';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -399,6 +400,15 @@
 
 	$effect(() => {
 		setCurrentPage(currentPage);
+	});
+
+	// Handle navigation requests from chat tool calls
+	$effect(() => {
+		const target = getNavigateTarget();
+		if (target !== null) {
+			consumeNavigateTarget();
+			goToPage(target);
+		}
 	});
 
 	function handleSelectionChange(): void {

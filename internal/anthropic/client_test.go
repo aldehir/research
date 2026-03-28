@@ -2,7 +2,9 @@ package anthropic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -125,6 +127,183 @@ func TestStream_APIError_IncludesResponseBody(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "401")
 	assert.Contains(t, err.Error(), "invalid api key")
+}
+
+func TestStream_SendsToolDefinitions(t *testing.T) {
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		json.Unmarshal(bodyBytes, &receivedBody)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hi\"}}\n\n")
+		flusher.Flush()
+		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key")
+	c.BaseURL = server.URL
+
+	ch, err := c.Stream(context.Background(), Request{
+		Messages: []Message{{Role: "user", Content: "search for attention"}},
+		Tools:    PDFTools(),
+	})
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	// Verify tools were sent in the request
+	tools, ok := receivedBody["tools"].([]any)
+	require.True(t, ok, "tools field should be present in API request")
+	assert.GreaterOrEqual(t, len(tools), 3, "should have at least 3 tool definitions")
+
+	// Verify first tool has expected structure
+	tool := tools[0].(map[string]any)
+	assert.NotEmpty(t, tool["name"])
+	assert.NotEmpty(t, tool["description"])
+	assert.NotNil(t, tool["input_schema"])
+}
+
+func TestStream_ParsesToolUseEvents(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+
+		// content_block_start with tool_use
+		fmt.Fprint(w, `event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_abc123","name":"search_pdf","input":{}}}
+
+`)
+		flusher.Flush()
+
+		// input_json_delta
+		fmt.Fprint(w, `event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"query\":"}}
+
+`)
+		flusher.Flush()
+
+		fmt.Fprint(w, `event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\"attention\"}"}}
+
+`)
+		flusher.Flush()
+
+		// content_block_stop
+		fmt.Fprint(w, `event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+`)
+		flusher.Flush()
+
+		// message_stop
+		fmt.Fprint(w, `event: message_stop
+data: {"type":"message_stop"}
+
+`)
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key")
+	c.BaseURL = server.URL
+
+	ch, err := c.Stream(context.Background(), Request{
+		Messages: []Message{{Role: "user", Content: "search for attention"}},
+	})
+	require.NoError(t, err)
+
+	var events []StreamEvent
+	for ev := range ch {
+		events = append(events, ev)
+	}
+
+	// Should have a tool_use event
+	var toolEvent *StreamEvent
+	for i := range events {
+		if events[i].Type == "tool_use" {
+			toolEvent = &events[i]
+			break
+		}
+	}
+	require.NotNil(t, toolEvent, "should emit a tool_use event")
+	assert.Equal(t, "toolu_abc123", toolEvent.ToolUseID)
+	assert.Equal(t, "search_pdf", toolEvent.ToolName)
+	assert.JSONEq(t, `{"query":"attention"}`, toolEvent.ToolInput)
+}
+
+func TestStream_ToolResultMessages(t *testing.T) {
+	// Verify that messages with tool_result content blocks are sent correctly
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		json.Unmarshal(bodyBytes, &receivedBody)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"found it\"}}\n\n")
+		flusher.Flush()
+		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key")
+	c.BaseURL = server.URL
+
+	ch, err := c.Stream(context.Background(), Request{
+		Messages: []Message{
+			{Role: "user", Content: "search for attention"},
+			{Role: "assistant", ContentBlocks: []ContentBlock{
+				{Type: "tool_use", ID: "toolu_abc", Name: "search_pdf", Input: json.RawMessage(`{"query":"attention"}`)},
+			}},
+			{Role: "user", ContentBlocks: []ContentBlock{
+				{Type: "tool_result", ToolUseID: "toolu_abc", Content: "Found on page 3: attention mechanism"},
+			}},
+		},
+	})
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	// Verify the messages were serialized with content blocks
+	msgs := receivedBody["messages"].([]any)
+	require.Len(t, msgs, 3)
+
+	// Assistant message should have tool_use content block
+	assistantMsg := msgs[1].(map[string]any)
+	assert.Equal(t, "assistant", assistantMsg["role"])
+	blocks := assistantMsg["content"].([]any)
+	toolUseBlock := blocks[0].(map[string]any)
+	assert.Equal(t, "tool_use", toolUseBlock["type"])
+	assert.Equal(t, "toolu_abc", toolUseBlock["id"])
+
+	// User message should have tool_result content block
+	userMsg := msgs[2].(map[string]any)
+	assert.Equal(t, "user", userMsg["role"])
+	resultBlocks := userMsg["content"].([]any)
+	resultBlock := resultBlocks[0].(map[string]any)
+	assert.Equal(t, "tool_result", resultBlock["type"])
+	assert.Equal(t, "toolu_abc", resultBlock["tool_use_id"])
+}
+
+func TestPDFTools_HasExpectedTools(t *testing.T) {
+	tools := PDFTools()
+	names := make([]string, len(tools))
+	for i, tool := range tools {
+		names[i] = tool.Name
+	}
+	assert.Contains(t, names, "search_pdf")
+	assert.Contains(t, names, "read_page")
+	assert.Contains(t, names, "go_to_page")
 }
 
 func TestStream_ContextCancellation(t *testing.T) {

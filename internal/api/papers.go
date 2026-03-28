@@ -99,6 +99,31 @@ func handleUploadPaper(db *sql.DB, storage *pdf.Storage, logger *slog.Logger) ht
 			return
 		}
 
+		// Best-effort metadata extraction
+		if meta, err := pdf.ExtractMetadata(path); err == nil {
+			m := store.PaperMetadata{PageCount: &meta.PageCount}
+			if meta.Author != "" {
+				m.Author = &meta.Author
+			}
+			if meta.Subject != "" {
+				m.Subject = &meta.Subject
+			}
+			if meta.CreatedAt != "" {
+				m.PublishedDate = &meta.CreatedAt
+			}
+			if meta.Title != "" {
+				paper.Title = meta.Title
+				db.Exec(`UPDATE papers SET title = ? WHERE id = ?`, meta.Title, id)
+			}
+			store.UpdatePaperMetadata(db, id, m)
+			paper.Author = m.Author
+			paper.Subject = m.Subject
+			paper.PublishedDate = m.PublishedDate
+			paper.PageCount = m.PageCount
+		} else {
+			logger.Warn("pdf metadata extraction failed", "id", id, "error", err)
+		}
+
 		writeJSON(w, http.StatusCreated, paper)
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
+	gopdf "github.com/go-pdf/fpdf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -228,6 +229,46 @@ func TestServePDF(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, body["error"], "not found")
 	})
+}
+
+func generateMinimalPDF(t *testing.T) []byte {
+	t.Helper()
+	doc := gopdf.New("P", "mm", "Letter", "")
+	doc.AddPage()
+	doc.SetFont("Helvetica", "", 12)
+	doc.Text(10, 20, "Test content")
+	var buf bytes.Buffer
+	require.NoError(t, doc.Output(&buf))
+	return buf.Bytes()
+}
+
+func TestUploadPaper_ExtractsMetadata(t *testing.T) {
+	mux, tdb, _ := testMux(t)
+	pdfBytes := generateMinimalPDF(t)
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("file", "research.pdf")
+	require.NoError(t, err)
+	_, err = part.Write(pdfBytes)
+	require.NoError(t, err)
+	w.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/papers", &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var paper store.Paper
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&paper))
+
+	// Re-read from DB to get metadata
+	got, err := store.GetPaper(tdb.DB, paper.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.PageCount, "page_count should be extracted from valid PDF")
+	assert.Equal(t, 1, *got.PageCount)
 }
 
 func TestUploadPaper(t *testing.T) {

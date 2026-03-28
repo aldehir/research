@@ -34,3 +34,37 @@ func TestBuildSystemPrompt_WithBoth(t *testing.T) {
 	surroundingIdx := strings.Index(prompt, "The theory of relativity...")
 	assert.Less(t, selectedIdx, surroundingIdx)
 }
+
+func TestBuildSystemPrompt_WithDocumentContext(t *testing.T) {
+	ctx := PromptContext{
+		DocumentTitle:  "Attention Is All You Need",
+		DocumentAuthor: "Vaswani et al.",
+		CurrentPage:    5,
+		TotalPages:     12,
+	}
+	prompt := BuildSystemPromptFromContext(ctx)
+	assert.Contains(t, prompt, "Attention Is All You Need")
+	assert.Contains(t, prompt, "Vaswani et al.")
+	assert.Contains(t, prompt, "5")
+	assert.Contains(t, prompt, "12")
+}
+
+func TestBuildSystemPrompt_ContextWithSelectedText(t *testing.T) {
+	ctx := PromptContext{
+		DocumentTitle: "Test Paper",
+		SelectedText:  "key finding",
+		CurrentPage:   3,
+		TotalPages:    10,
+	}
+	prompt := BuildSystemPromptFromContext(ctx)
+	assert.Contains(t, prompt, "Test Paper")
+	assert.Contains(t, prompt, "key finding")
+}
+
+func TestBuildSystemPrompt_ContextMinimalFields(t *testing.T) {
+	ctx := PromptContext{}
+	prompt := BuildSystemPromptFromContext(ctx)
+	assert.Contains(t, prompt, "research paper")
+	// Should not contain metadata section when no metadata
+	assert.NotContains(t, prompt, "Document:")
+}

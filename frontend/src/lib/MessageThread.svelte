@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getMessages, getStreamingContent, getIsStreaming } from '$lib/chat.svelte';
+	import { getMessages, getStreamingContent, getIsStreaming, getActiveToolCall } from '$lib/chat.svelte';
 	import { tick } from 'svelte';
 
 	let container: HTMLDivElement | undefined = $state();
@@ -11,9 +11,20 @@
 		}
 	}
 
+	const toolLabels: Record<string, string> = {
+		search_pdf: 'Searching PDF...',
+		read_page: 'Reading page...',
+		go_to_page: 'Navigating...',
+	};
+
+	function toolLabel(name: string): string {
+		return toolLabels[name] ?? 'Using tool...';
+	}
+
 	$effect(() => {
 		getMessages();
 		getStreamingContent();
+		getActiveToolCall();
 		scrollToBottom();
 	});
 </script>
@@ -25,9 +36,6 @@
 		{#each getMessages() as message (message.id)}
 			<div class="message {message.role}">
 				<div class="role-label">{message.role === 'user' ? 'You' : 'Assistant'}</div>
-				{#if message.selected_text}
-					<blockquote class="selected-context">{message.selected_text}</blockquote>
-				{/if}
 				<div class="content">{message.content}</div>
 			</div>
 		{/each}
@@ -40,7 +48,11 @@
 		{#if getIsStreaming() && !getStreamingContent()}
 			<div class="message assistant">
 				<div class="role-label">Assistant</div>
-				<div class="content thinking">Thinking...</div>
+				{#if getActiveToolCall()}
+					<div class="content tool-activity">{toolLabel(getActiveToolCall()!.name)}</div>
+				{:else}
+					<div class="content thinking">Thinking...</div>
+				{/if}
 			</div>
 		{/if}
 	{/if}
@@ -99,12 +111,10 @@
 		font-style: italic;
 	}
 
-	.selected-context {
-		margin: 0 0 0.5rem 0;
-		padding: 0.5rem;
-		border-left: 3px solid #aaa;
-		background: rgba(0, 0, 0, 0.05);
-		font-size: 0.8rem;
-		color: #555;
+	.tool-activity {
+		color: #5f6368;
+		font-style: italic;
+		font-size: 0.85rem;
 	}
+
 </style>

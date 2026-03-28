@@ -36,8 +36,14 @@ func Open(dsn string, logger ...*slog.Logger) (*sql.DB, error) {
 
 // Migrate runs schema migrations against the database.
 func Migrate(db *sql.DB) error {
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	for _, m := range migrations {
+		// Ignore errors from ALTER TABLE ADD COLUMN — column may already exist.
+		db.Exec(m)
+	}
+	return nil
 }
 
 const schema = `
@@ -66,3 +72,10 @@ CREATE TABLE IF NOT EXISTS messages (
 	created_at TEXT NOT NULL
 );
 `
+
+var migrations = []string{
+	`ALTER TABLE papers ADD COLUMN author TEXT`,
+	`ALTER TABLE papers ADD COLUMN subject TEXT`,
+	`ALTER TABLE papers ADD COLUMN published_date TEXT`,
+	`ALTER TABLE papers ADD COLUMN page_count INTEGER`,
+}

@@ -5,14 +5,17 @@ import {
 	deleteChatSession,
 	sendMessage
 } from '$lib/api';
-import type { ChatSession, Message, MessageContext } from '$lib/api';
+import type { ChatSession, Message, MessageContext, ToolCall } from '$lib/api';
 import { generateId } from '$lib/uuid';
+import { requestGoToPage } from '$lib/pdf-navigate.svelte';
 
 let sessions = $state<ChatSession[]>([]);
 let activeSessionId = $state<string | null>(null);
 let messages = $state<Message[]>([]);
 let streamingContent = $state('');
 let isStreaming = $state(false);
+let activeToolCall = $state<ToolCall | null>(null);
+let toolCallHandler = $state<((tool: ToolCall) => void) | null>(null);
 
 export async function loadSessions(paperId: string): Promise<void> {
 	sessions = await listChatSessions(paperId);
@@ -55,7 +58,6 @@ export async function sendChatMessage(
 		chat_session_id: chatId,
 		role: 'user',
 		content,
-		selected_text: context?.selectedText,
 		created_at: new Date().toISOString()
 	};
 	messages = [...messages, userMessage];
@@ -80,13 +82,24 @@ export async function sendChatMessage(
 			messages = [...messages, assistantMessage];
 			streamingContent = '';
 			isStreaming = false;
+			activeToolCall = null;
 		},
 		(error: string) => {
 			console.error('Chat error:', error);
 			streamingContent = '';
 			isStreaming = false;
+			activeToolCall = null;
 		},
-		context
+		context,
+		(tool: ToolCall) => {
+			activeToolCall = tool;
+			if (tool.name === 'go_to_page' && typeof tool.args.page === 'number') {
+				requestGoToPage(tool.args.page);
+			}
+			if (toolCallHandler) {
+				toolCallHandler(tool);
+			}
+		}
 	);
 }
 
@@ -116,4 +129,12 @@ export function getStreamingContent(): string {
 
 export function getIsStreaming(): boolean {
 	return isStreaming;
+}
+
+export function getActiveToolCall(): ToolCall | null {
+	return activeToolCall;
+}
+
+export function setToolCallHandler(handler: ((tool: ToolCall) => void) | null): void {
+	toolCallHandler = handler;
 }

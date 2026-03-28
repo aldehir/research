@@ -11,4 +11,4 @@
 - [x] 07 — Attach selected text and page content to chat messages `COMPLETE`
 - [x] 08 — Stabilize scrollbar for virtual PDF rendering `COMPLETE`
 - [x] 09 — Add table of contents with page jumping `COMPLETE`
-- [ ] 10 — Implement Anthropic tool calling for PDF interactions `TODO`
+- [x] 10 — Implement Anthropic tool calling for PDF interactions `COMPLETE`

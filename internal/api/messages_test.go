@@ -7,12 +7,15 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/aldehir/research/internal/anthropic"
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
+	gopdf "github.com/go-pdf/fpdf"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,6 +50,32 @@ func (c *captureStreamer) Stream(ctx context.Context, req anthropic.Request) (<-
 	return c.mockStreamer.Stream(ctx, req)
 }
 
+// multiTurnStreamer simulates a tool call loop: first call returns tool_use,
+// subsequent calls return the corresponding events from the sequence.
+type multiTurnStreamer struct {
+	calls    [][]anthropic.StreamEvent
+	callIdx  int
+	requests []anthropic.Request
+}
+
+func (m *multiTurnStreamer) Stream(_ context.Context, req anthropic.Request) (<-chan anthropic.StreamEvent, error) {
+	m.requests = append(m.requests, req)
+	idx := m.callIdx
+	if idx >= len(m.calls) {
+		idx = len(m.calls) - 1
+	}
+	m.callIdx++
+	events := m.calls[idx]
+	ch := make(chan anthropic.StreamEvent)
+	go func() {
+		defer close(ch)
+		for _, ev := range events {
+			ch <- ev
+		}
+	}()
+	return ch, nil
+}
+
 func seedChatSession(t *testing.T, tdb *store.TestDB) store.ChatSession {
 	t.Helper()
 	seedTestPaper(t, tdb)
@@ -61,9 +90,11 @@ func seedChatSession(t *testing.T, tdb *store.TestDB) store.ChatSession {
 }
 
 type sseEvent struct {
-	Type  string `json:"type"`
-	Text  string `json:"text,omitempty"`
-	Error string `json:"error,omitempty"`
+	Type  string          `json:"type"`
+	Text  string          `json:"text,omitempty"`
+	Error string          `json:"error,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Args  json.RawMessage `json:"args,omitempty"`
 }
 
 func parseSSEEvents(t *testing.T, body string) []sseEvent {
@@ -270,6 +301,80 @@ func TestSendMessage(t *testing.T) {
 		assert.Equal(t, "context around", mock.captured.SurroundingText)
 	})
 
+	t.Run("populates document metadata from paper record", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+
+		// Create paper with metadata
+		author := "Einstein"
+		pageCount := 20
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Relativity",
+			FilePath:  "/papers/test.pdf",
+			FileSize:  12345,
+			Author:    &author,
+			PageCount: &pageCount,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &captureStreamer{
+			mockStreamer: mockStreamer{
+				events: []anthropic.StreamEvent{
+					{Type: "content_block_delta", Text: "Ok"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+		mux := testMuxWithChat(t, tdb, mock)
+
+		body := `{"content":"Explain this","current_page":5}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotNil(t, mock.captured)
+		assert.Equal(t, "Relativity", mock.captured.DocumentTitle)
+		assert.Equal(t, "Einstein", mock.captured.DocumentAuthor)
+		assert.Equal(t, 5, mock.captured.CurrentPage)
+		assert.Equal(t, 20, mock.captured.TotalPages)
+	})
+
+	t.Run("passes current_page to anthropic request", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		seedChatSession(t, tdb)
+
+		mock := &captureStreamer{
+			mockStreamer: mockStreamer{
+				events: []anthropic.StreamEvent{
+					{Type: "content_block_delta", Text: "Ok"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+		mux := testMuxWithChat(t, tdb, mock)
+
+		body := `{"content":"What is on this page?","current_page":7}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotNil(t, mock.captured)
+		assert.Equal(t, 7, mock.captured.CurrentPage)
+	})
+
 	t.Run("stores selected_text on user message", func(t *testing.T) {
 		tdb := store.NewTestDB(t)
 		seedChatSession(t, tdb)
@@ -300,8 +405,212 @@ func TestSendMessage(t *testing.T) {
 	})
 }
 
+func TestSendMessage_ToolExecutionLoop(t *testing.T) {
+	t.Run("executes search_pdf tool and returns final text", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		// Create a PDF with searchable text
+		pdfPath := storage.Path("paper-1")
+		createTestPDFWithText(t, pdfPath, "The attention mechanism is key to transformer models.")
+
+		pageCount := 1
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Attention Paper",
+			FilePath:  pdfPath,
+			FileSize:  1000,
+			PageCount: &pageCount,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				// First call: model wants to search
+				{
+					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "search_pdf", ToolInput: `{"query":"attention"}`},
+					{Type: "message_stop"},
+				},
+				// Second call (after tool result): model gives final answer
+				{
+					{Type: "content_block_delta", Text: "I found attention on page 1"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"Find where attention is discussed"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Parse SSE events
+		events := parseSSEEvents(t, rec.Body.String())
+
+		// Should have tool_call, delta, and done events
+		var hasToolCall, hasDelta, hasDone bool
+		for _, ev := range events {
+			switch ev.Type {
+			case "tool_call":
+				hasToolCall = true
+			case "delta":
+				hasDelta = true
+			case "done":
+				hasDone = true
+			}
+		}
+		assert.True(t, hasToolCall, "should emit tool_call event")
+		assert.True(t, hasDelta, "should emit delta event with final text")
+		assert.True(t, hasDone, "should emit done event")
+
+		// Verify the second request included tool_result
+		require.Len(t, mock.requests, 2)
+		secondReq := mock.requests[1]
+		lastMsg := secondReq.Messages[len(secondReq.Messages)-1]
+		require.NotEmpty(t, lastMsg.ContentBlocks)
+		assert.Equal(t, "tool_result", lastMsg.ContentBlocks[0].Type)
+	})
+
+	t.Run("executes read_page tool", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		pdfPath := storage.Path("paper-1")
+		createTestPDFWithText(t, pdfPath, "Page one content here.")
+
+		pageCount := 1
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  pdfPath,
+			FileSize:  1000,
+			PageCount: &pageCount,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_2", ToolName: "read_page", ToolInput: `{"page":1}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "The page says..."},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"What's on page 1?"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Verify tool_result was sent back with page text
+		require.Len(t, mock.requests, 2)
+		secondReq := mock.requests[1]
+		lastMsg := secondReq.Messages[len(secondReq.Messages)-1]
+		require.NotEmpty(t, lastMsg.ContentBlocks)
+		assert.Equal(t, "tool_result", lastMsg.ContentBlocks[0].Type)
+		assert.Contains(t, lastMsg.ContentBlocks[0].Content, "Page one content")
+	})
+
+	t.Run("go_to_page emits client-side SSE event", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  "/test.pdf",
+			FileSize:  1000,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_3", ToolName: "go_to_page", ToolInput: `{"page":5}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "Navigated to page 5"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"Go to page 5"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		events := parseSSEEvents(t, rec.Body.String())
+		var toolCallEvent *sseEvent
+		for i := range events {
+			if events[i].Type == "tool_call" {
+				toolCallEvent = &events[i]
+				break
+			}
+		}
+		require.NotNil(t, toolCallEvent)
+	})
+}
+
+// createTestPDFWithText is a helper that creates a valid PDF with text.
+func createTestPDFWithText(t *testing.T, path string, text string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	doc := gopdf.New("P", "mm", "Letter", "")
+	doc.AddPage()
+	doc.SetFont("Helvetica", "", 12)
+	doc.Text(10, 20, text)
+	require.NoError(t, doc.OutputFileAndClose(path))
+}
+
 func testMuxWithChat(t *testing.T, tdb *store.TestDB, chat ChatStreamer) *http.ServeMux {
 	t.Helper()
-	storage := pdf.NewStorage(t.TempDir())
-	return NewMux(tdb.DB, storage, chat, slog.Default())
+	return NewMux(tdb.DB, pdf.NewStorage(t.TempDir()), chat, slog.Default())
 }

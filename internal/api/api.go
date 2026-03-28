@@ -22,7 +22,7 @@ func NewMux(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logger *slog.Lo
 	mux.Handle("POST /api/papers/{id}/chats", wrap(handleCreateChatSession(db, logger)))
 	mux.Handle("GET /api/papers/{id}/chats/{chatId}", wrap(handleGetChatSession(db, logger)))
 	mux.Handle("DELETE /api/papers/{id}/chats/{chatId}", wrap(handleDeleteChatSession(db, logger)))
-	mux.Handle("POST /api/papers/{id}/chats/{chatId}/messages", wrap(handleSendMessage(db, chat, logger)))
+	mux.Handle("POST /api/papers/{id}/chats/{chatId}/messages", wrap(handleSendMessage(db, storage, chat, logger)))
 	return mux
 }
 
