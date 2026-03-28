@@ -17,7 +17,7 @@
 
 ## Task Status
 
-- [ ] 01 — Project Scaffolding `TODO`
+- [x] 01 — Project Scaffolding `COMPLETE`
 - [ ] 02 — Database Setup `TODO`
 - [ ] 03 — Papers CRUD API `TODO`
 - [ ] 04 — PDF Upload & Storage `TODO`
