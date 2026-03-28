@@ -18,8 +18,8 @@
 ## Task Status
 
 - [x] 01 — Project Scaffolding `COMPLETE`
-- [ ] 02 — Database Setup `IN PROGRESS`
-- [ ] 03 — Papers CRUD API `TODO`
+- [x] 02 — Database Setup `COMPLETE`
+- [ ] 03 — Papers CRUD API `IN PROGRESS`
 - [ ] 04 — PDF Upload & Storage `TODO`
 - [ ] 05 — PDF Serving `TODO`
 - [ ] 06 — Frontend: Paper Library `TODO`

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/aldehir/research/internal/api"
+	"github.com/aldehir/research/internal/store"
 )
 
 func main() {
@@ -16,7 +17,18 @@ func main() {
 		addr = v
 	}
 
-	mux := api.NewMux()
+	dbPath := "research.db"
+	if v := os.Getenv("DB_PATH"); v != "" {
+		dbPath = v
+	}
+
+	db, err := store.Open(dbPath)
+	if err != nil {
+		log.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+
+	mux := api.NewMux(db)
 
 	serveFrontend(mux)
 
