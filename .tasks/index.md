@@ -27,6 +27,6 @@
 - [x] 08 — Text Selection & Context `COMPLETE`
 - [x] 09 — Chat Sessions API `COMPLETE`
 - [x] 10 — Anthropic Client `COMPLETE`
-- [ ] 11 — Messages Endpoint + SSE `TODO`
+- [x] 11 — Messages Endpoint + SSE `COMPLETE`
 - [ ] 12 — Frontend: Chat Panel `TODO`
 - [ ] 13 — Layout & Integration `TODO`

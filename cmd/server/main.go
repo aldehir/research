@@ -35,17 +35,15 @@ func main() {
 	}
 	defer db.Close()
 
-	var aiClient *anthropic.Client
+	var chat api.ChatStreamer
 	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		aiClient = anthropic.NewClient(apiKey)
+		chat = anthropic.NewClient(apiKey)
 		log.Println("Anthropic API client initialized")
 	} else {
 		log.Println("WARNING: ANTHROPIC_API_KEY not set, chat features will be unavailable")
 	}
-	_ = aiClient // will be used in Task 11
-
 	storage := pdf.NewStorage(pdfDir)
-	mux := api.NewMux(db, storage)
+	mux := api.NewMux(db, storage, chat)
 
 	serveFrontend(mux)
 

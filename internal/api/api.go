@@ -8,7 +8,7 @@ import (
 	"github.com/aldehir/research/internal/pdf"
 )
 
-func NewMux(db *sql.DB, storage *pdf.Storage) *http.ServeMux {
+func NewMux(db *sql.DB, storage *pdf.Storage, chat ChatStreamer) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", handleHealth)
 	mux.HandleFunc("GET /api/papers", handleListPapers(db))
@@ -20,6 +20,7 @@ func NewMux(db *sql.DB, storage *pdf.Storage) *http.ServeMux {
 	mux.HandleFunc("POST /api/papers/{id}/chats", handleCreateChatSession(db))
 	mux.HandleFunc("GET /api/papers/{id}/chats/{chatId}", handleGetChatSession(db))
 	mux.HandleFunc("DELETE /api/papers/{id}/chats/{chatId}", handleDeleteChatSession(db))
+	mux.HandleFunc("POST /api/papers/{id}/chats/{chatId}/messages", handleSendMessage(db, chat))
 	return mux
 }
 
