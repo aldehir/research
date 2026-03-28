@@ -55,7 +55,8 @@ export async function renderAnnotations(
 export async function renderPage(
 	page: PDFPageProxy,
 	container: HTMLDivElement,
-	currentScale: number
+	currentScale: number,
+	signal?: AbortSignal
 ): Promise<void> {
 	const viewport = page.getViewport({ scale: currentScale * PDF_TO_CSS_UNITS });
 
@@ -86,8 +87,11 @@ export async function renderPage(
 	container.appendChild(canvas);
 
 	await page.render({ canvasContext: ctx, canvas, viewport }).promise;
+	if (signal?.aborted) return;
 
 	const textContent = await page.getTextContent();
+	if (signal?.aborted) return;
+
 	const textDiv = document.createElement('div');
 	textDiv.className = 'textLayer';
 	container.appendChild(textDiv);

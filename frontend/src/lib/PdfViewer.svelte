@@ -53,6 +53,7 @@
 	let scrollContainer: HTMLDivElement | undefined = $state();
 	let pageElements = new Map<number, HTMLDivElement>();
 	let renderedPages = new Set<number>();
+	let pageAbortControllers = new Map<number, AbortController>();
 	let observer: IntersectionObserver | null = null;
 	let renderGeneration = 0;
 	let resizeObserver: ResizeObserver | null = null;
@@ -91,6 +92,14 @@
 		}
 	}
 
+	function cancelPageRender(pageNum: number): void {
+		const ac = pageAbortControllers.get(pageNum);
+		if (ac) {
+			ac.abort();
+			pageAbortControllers.delete(pageNum);
+		}
+	}
+
 	function handleIntersection(entries: IntersectionObserverEntry[]): void {
 		for (const entry of entries) {
 			const pageNum = Number(entry.target.getAttribute('data-page'));
@@ -99,13 +108,19 @@
 			if (entry.isIntersecting && !renderedPages.has(pageNum)) {
 				const page = pages[pageNum - 1];
 				if (page) {
+					cancelPageRender(pageNum);
 					renderedPages.add(pageNum);
 					const el = entry.target as HTMLDivElement;
-					renderPage(page, el, scale).then(() =>
-						renderAnnotations(page, el, scale, linkService)
-					);
+					const ac = new AbortController();
+					pageAbortControllers.set(pageNum, ac);
+					renderPage(page, el, scale, ac.signal).then(() => {
+						if (!ac.signal.aborted) {
+							renderAnnotations(page, el, scale, linkService);
+						}
+					});
 				}
 			} else if (!entry.isIntersecting && renderedPages.has(pageNum)) {
+				cancelPageRender(pageNum);
 				renderedPages.delete(pageNum);
 				clearPage(entry.target as HTMLDivElement);
 				// Restore placeholder dimensions after clearing
@@ -127,6 +142,9 @@
 		loadedPaperId = id;
 		loading = true;
 		error = null;
+		for (const [pageNum] of pageAbortControllers) {
+			cancelPageRender(pageNum);
+		}
 		pageElements = new Map();
 		renderedPages = new Set();
 		renderGeneration++;
@@ -182,12 +200,15 @@
 
 	function collectPageOffsets(): { pageNum: number; top: number; height: number }[] {
 		if (!scrollContainer) return [];
+		const containerRect = scrollContainer.getBoundingClientRect();
+		const scrollTop = scrollContainer.scrollTop;
 		const offsets: { pageNum: number; top: number; height: number }[] = [];
 		for (const [pageNum, el] of pageElements) {
+			const rect = el.getBoundingClientRect();
 			offsets.push({
 				pageNum,
-				top: el.offsetTop,
-				height: el.offsetHeight
+				top: rect.top - containerRect.top + scrollTop,
+				height: rect.height
 			});
 		}
 		offsets.sort((a, b) => a.pageNum - b.pageNum);
@@ -196,6 +217,11 @@
 
 	async function rerenderVisible(): Promise<void> {
 		const gen = ++renderGeneration;
+
+		// Cancel all in-flight renders
+		for (const [pageNum] of pageAbortControllers) {
+			cancelPageRender(pageNum);
+		}
 		renderedPages = new Set();
 
 		// Capture scroll anchor before resizing
@@ -515,6 +541,7 @@
 		flex: 1;
 		overflow: auto;
 		overflow-anchor: none;
+		position: relative;
 		background: #888;
 		display: flex;
 		flex-direction: column;
@@ -526,6 +553,7 @@
 	.page-wrapper {
 		background: white;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		flex-shrink: 0;
 	}
 
 	.status {

@@ -129,6 +129,28 @@ describe('renderPage', () => {
 		expect(textLayer.style.overflow).toBe('');
 	});
 
+	it('stops rendering when abort signal fires after page.render', async () => {
+		let resolveRender: () => void;
+		const slowPage = {
+			...fakePage,
+			render: () => ({ promise: new Promise<void>((r) => { resolveRender = r; }) })
+		};
+
+		const ac = new AbortController();
+		const promise = renderPage(slowPage as any, container, 1.0, ac.signal);
+
+		// Canvas is appended synchronously before the await
+		expect(container.querySelector('canvas')).not.toBeNull();
+
+		// Abort while page.render is still pending
+		ac.abort();
+		resolveRender!();
+		await promise;
+
+		// textLayer should NOT be added since signal was aborted
+		expect(container.querySelector('.textLayer')).toBeNull();
+	});
+
 	it('sets --total-scale-factor CSS variable on container', async () => {
 		await renderPage(fakePage as any, container, 1.5);
 
