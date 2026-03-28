@@ -59,7 +59,7 @@
 {#snippet segmentList(segments: StreamSegment[], messageId: string)}
 	{#each segments as segment, i}
 		{#if segment.type === 'text'}
-			<span class="segment-text">{segment.content}</span>
+			{segment.content}
 		{:else}
 			{@render toolChip(segment, segmentKey(messageId, i))}
 		{/if}
@@ -151,10 +151,6 @@
 	.thinking {
 		color: #888;
 		font-style: italic;
-	}
-
-	.segment-text {
-		white-space: pre-wrap;
 	}
 
 	.tool-chip {

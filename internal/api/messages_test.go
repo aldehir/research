@@ -96,8 +96,6 @@ type sseEvent struct {
 	Error     string          `json:"error,omitempty"`
 	Name      string          `json:"name,omitempty"`
 	Args      json.RawMessage `json:"args,omitempty"`
-	Preview   string          `json:"preview,omitempty"`
-	Content   string          `json:"content,omitempty"`
 	RequestID string          `json:"request_id,omitempty"`
 }
 

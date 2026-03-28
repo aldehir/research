@@ -55,9 +55,7 @@ export async function deleteSession(paperId: string, chatId: string): Promise<vo
 function appendTextDelta(text: string): void {
 	const last = streamSegments[streamSegments.length - 1];
 	if (last?.type === 'text') {
-		// Mutate the proxy directly — Svelte 5 deep reactivity tracks
-		// the property write and updates only the {segment.content} expression,
-		// without re-iterating the {#each} or copying the array.
+		// Direct proxy mutation — Svelte 5 tracks the property write
 		last.content += text;
 	} else {
 		streamSegments.push({ type: 'text', content: text });
