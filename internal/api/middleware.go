@@ -24,6 +24,12 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	return r.ResponseWriter.Write(b)
 }
 
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // requestLogger returns middleware that logs each request with method, path, status, and duration.
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

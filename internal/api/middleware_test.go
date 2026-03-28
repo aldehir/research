@@ -55,6 +55,29 @@ func TestRequestLoggingMiddleware(t *testing.T) {
 		assert.Contains(t, logOutput, "status=404")
 	})
 
+	t.Run("preserves http.Flusher through wrapper", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+		flushed := false
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			f, ok := w.(http.Flusher)
+			assert.True(t, ok, "ResponseWriter should implement http.Flusher")
+			if ok {
+				f.Flush()
+				flushed = true
+			}
+		})
+
+		wrapped := requestLogger(logger)(handler)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+		rec := httptest.NewRecorder()
+		wrapped.ServeHTTP(rec, req)
+
+		assert.True(t, flushed, "Flush should have been called")
+	})
+
 	t.Run("defaults to 200 if WriteHeader not called", func(t *testing.T) {
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewTextHandler(&buf, nil))
