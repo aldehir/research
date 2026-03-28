@@ -1,11 +1,14 @@
 <script lang="ts">
-	import { getMessages, getStreamSegments, getIsStreaming, getMessageSegments } from '$lib/chat.svelte';
+	import { getMessages, getStreamSegments, getStreamingContent, getIsStreaming, getMessageSegments } from '$lib/chat.svelte';
 	import type { StreamSegment } from '$lib/chat.svelte';
 	import { formatToolLabel, formatToolArgs } from '$lib/tool-display';
 	import { tick } from 'svelte';
 
 	let container: HTMLDivElement | undefined = $state();
 	let expandedTools = $state(new Set<string>());
+	const messages = $derived(getMessages());
+	const streaming = $derived(getIsStreaming());
+	const segments = $derived(getStreamSegments());
 
 	async function scrollToBottom() {
 		await tick();
@@ -29,8 +32,8 @@
 	}
 
 	$effect(() => {
-		getMessages();
-		getStreamSegments();
+		messages;
+		getStreamingContent();
 		scrollToBottom();
 	});
 </script>
@@ -64,10 +67,10 @@
 {/snippet}
 
 <div class="thread" bind:this={container}>
-	{#if getMessages().length === 0 && !getIsStreaming()}
+	{#if messages.length === 0 && !streaming}
 		<p class="empty">Send a message to start the conversation</p>
 	{:else}
-		{#each getMessages() as message (message.id)}
+		{#each messages as message (message.id)}
 			<div class="message {message.role}">
 				<div class="role-label">{message.role === 'user' ? 'You' : 'Assistant'}</div>
 				{#if message.role === 'assistant' && getMessageSegments(message.id)}
@@ -79,8 +82,7 @@
 				{/if}
 			</div>
 		{/each}
-		{#if getIsStreaming()}
-			{@const segments = getStreamSegments()}
+		{#if streaming}
 			{#if segments.length > 0}
 				<div class="message assistant">
 					<div class="role-label">Assistant</div>

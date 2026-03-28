@@ -52,14 +52,24 @@ export async function deleteSession(paperId: string, chatId: string): Promise<vo
 	}
 }
 
-function appendTextSegment(text: string): void {
+function appendTextDelta(text: string): void {
 	const last = streamSegments[streamSegments.length - 1];
 	if (last?.type === 'text') {
+		// Mutate the proxy directly — Svelte 5 deep reactivity tracks
+		// the property write and updates only the {segment.content} expression,
+		// without re-iterating the {#each} or copying the array.
 		last.content += text;
-		streamSegments = [...streamSegments];
 	} else {
-		streamSegments = [...streamSegments, { type: 'text', content: text }];
+		streamSegments.push({ type: 'text', content: text });
 	}
+}
+
+function snapshotSegments(): StreamSegment[] {
+	return streamSegments.map(s =>
+		s.type === 'text'
+			? { type: 'text' as const, content: s.content }
+			: { type: 'tool' as const, name: s.name, args: { ...s.args }, result: s.result }
+	);
 }
 
 export async function sendChatMessage(
@@ -86,7 +96,7 @@ export async function sendChatMessage(
 		content,
 		(text: string) => {
 			streamingContent += text;
-			appendTextSegment(text);
+			appendTextDelta(text);
 		},
 		() => {
 			const assistantMessage: Message = {
@@ -98,7 +108,7 @@ export async function sendChatMessage(
 			};
 			const hasToolSegments = streamSegments.some(s => s.type === 'tool');
 			if (hasToolSegments) {
-				messageSegments = new Map(messageSegments).set(assistantMessage.id, [...streamSegments]);
+				messageSegments = new Map(messageSegments).set(assistantMessage.id, snapshotSegments());
 			}
 			messages = [...messages, assistantMessage];
 			streamingContent = '';
@@ -113,11 +123,11 @@ export async function sendChatMessage(
 		},
 		context,
 		(tool: ToolCall) => {
-			streamSegments = [...streamSegments, {
+			streamSegments.push({
 				type: 'tool',
 				name: tool.name,
 				args: tool.args
-			}];
+			});
 			if (tool.name === 'go_to_page' && typeof tool.args.page === 'number') {
 				requestGoToPage(tool.args.page);
 			}
@@ -126,12 +136,10 @@ export async function sendChatMessage(
 			}
 		},
 		(result: ToolResult) => {
-			// Find the last tool segment matching this result's name and attach the result
 			for (let i = streamSegments.length - 1; i >= 0; i--) {
 				const seg = streamSegments[i];
 				if (seg.type === 'tool' && seg.name === result.name && !seg.result) {
 					seg.result = result;
-					streamSegments = [...streamSegments];
 					break;
 				}
 			}
