@@ -2,6 +2,7 @@
 	import PaperList from '$lib/PaperList.svelte';
 	import PdfViewer from '$lib/PdfViewer.svelte';
 	import UploadZone from '$lib/UploadZone.svelte';
+	import ChatPanel from '$lib/ChatPanel.svelte';
 	import { loadPapers, getSelectedPaper } from '$lib/papers.svelte';
 	import { onMount } from 'svelte';
 
@@ -23,6 +24,9 @@
 			<p class="placeholder">Select a paper to view</p>
 		{/if}
 	</main>
+	{#if getSelectedPaper()}
+		<ChatPanel paperId={getSelectedPaper()!.id} />
+	{/if}
 </div>
 
 <style>
