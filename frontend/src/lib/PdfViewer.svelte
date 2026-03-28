@@ -6,6 +6,7 @@
 	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale } from '$lib/pdf-utils';
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
+	import { setPages, setCurrentPage, setSelectedText } from '$lib/pdf-context.svelte';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -379,6 +380,33 @@
 				break;
 		}
 	}
+
+	// Sync pages and currentPage to shared pdf-context store
+	$effect(() => {
+		setPages(pages);
+	});
+
+	$effect(() => {
+		setCurrentPage(currentPage);
+	});
+
+	function handleSelectionChange(): void {
+		const sel = window.getSelection();
+		if (!sel || sel.isCollapsed || !scrollContainer) {
+			return;
+		}
+		// Only capture selection within our PDF text layers
+		const anchorNode = sel.anchorNode;
+		if (anchorNode && scrollContainer.contains(anchorNode)) {
+			const text = sel.toString().trim();
+			setSelectedText(text);
+		}
+	}
+
+	$effect(() => {
+		document.addEventListener('selectionchange', handleSelectionChange);
+		return () => document.removeEventListener('selectionchange', handleSelectionChange);
+	});
 
 	$effect(() => {
 		const id = paperId;

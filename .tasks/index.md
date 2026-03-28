@@ -8,5 +8,6 @@
 - [x] 04 — Fix PDF text selection highlight misalignment `COMPLETE`
 - [x] 05 — Make Anthropic model configurable via environment variable `COMPLETE`
 - [x] 06 — Fix PDF text selection span geometry `COMPLETE`
-- [ ] 07 — Attach selected text and page content to chat messages `TODO`
+- [x] 07 — Attach selected text and page content to chat messages `COMPLETE`
 - [x] 08 — Stabilize scrollbar for virtual PDF rendering `COMPLETE`
+- [ ] 09 — Add table of contents with page jumping `TODO`

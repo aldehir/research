@@ -60,7 +60,13 @@ export interface Message {
 	chat_session_id: string;
 	role: 'user' | 'assistant';
 	content: string;
+	selected_text?: string;
 	created_at: string;
+}
+
+export interface MessageContext {
+	selectedText?: string;
+	surroundingText?: string;
 }
 
 export interface ChatSessionWithMessages extends ChatSession {
@@ -106,9 +112,16 @@ export async function sendMessage(
 	content: string,
 	onDelta: (text: string) => void,
 	onDone: () => void,
-	onError: (error: string) => void
+	onError: (error: string) => void,
+	context?: MessageContext
 ): Promise<void> {
 	const reqBody: Record<string, string> = { content };
+	if (context?.selectedText) {
+		reqBody.selected_text = context.selectedText;
+	}
+	if (context?.surroundingText) {
+		reqBody.surrounding_text = context.surroundingText;
+	}
 
 	let response: Response;
 	try {

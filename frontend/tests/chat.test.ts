@@ -205,6 +205,49 @@ describe('sendMessage', () => {
 		expect(onError).toHaveBeenCalledWith('Network error');
 	});
 
+	it('sends selected_text and surrounding_text when provided', async () => {
+		const stream = makeSSEStream([
+			'data: {"type":"done"}'
+		]);
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			body: stream
+		}));
+
+		await sendMessage(paperId, chatId, 'Explain this',
+			vi.fn(), vi.fn(), vi.fn(),
+			{ selectedText: 'some highlighted text', surroundingText: 'page content' }
+		);
+
+		const callArgs = vi.mocked(fetch).mock.calls[0];
+		const body = JSON.parse(callArgs[1]?.body as string);
+		expect(body.content).toBe('Explain this');
+		expect(body.selected_text).toBe('some highlighted text');
+		expect(body.surrounding_text).toBe('page content');
+	});
+
+	it('omits selected_text and surrounding_text when not provided', async () => {
+		const stream = makeSSEStream([
+			'data: {"type":"done"}'
+		]);
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			body: stream
+		}));
+
+		await sendMessage(paperId, chatId, 'Hi',
+			vi.fn(), vi.fn(), vi.fn()
+		);
+
+		const callArgs = vi.mocked(fetch).mock.calls[0];
+		const body = JSON.parse(callArgs[1]?.body as string);
+		expect(body.content).toBe('Hi');
+		expect(body.selected_text).toBeUndefined();
+		expect(body.surrounding_text).toBeUndefined();
+	});
+
 	it('handles chunked SSE data across multiple reads', async () => {
 		const encoder = new TextEncoder();
 		const stream = new ReadableStream<Uint8Array>({

@@ -5,7 +5,7 @@ import {
 	deleteChatSession,
 	sendMessage
 } from '$lib/api';
-import type { ChatSession, Message } from '$lib/api';
+import type { ChatSession, Message, MessageContext } from '$lib/api';
 import { generateId } from '$lib/uuid';
 
 let sessions = $state<ChatSession[]>([]);
@@ -47,13 +47,15 @@ export async function deleteSession(paperId: string, chatId: string): Promise<vo
 export async function sendChatMessage(
 	paperId: string,
 	chatId: string,
-	content: string
+	content: string,
+	context?: MessageContext
 ): Promise<void> {
 	const userMessage: Message = {
 		id: generateId(),
 		chat_session_id: chatId,
 		role: 'user',
 		content,
+		selected_text: context?.selectedText,
 		created_at: new Date().toISOString()
 	};
 	messages = [...messages, userMessage];
@@ -83,7 +85,8 @@ export async function sendChatMessage(
 			console.error('Chat error:', error);
 			streamingContent = '';
 			isStreaming = false;
-		}
+		},
+		context
 	);
 }
 
