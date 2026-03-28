@@ -189,6 +189,11 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	log.Info("stream starting", "model", c.Model, "messages", len(req.Messages))
+	log.Debug("request details",
+		"system_prompt_length", len(systemPrompt),
+		"tool_count", len(req.Tools),
+		"message_count", len(req.Messages),
+	)
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
@@ -207,14 +212,14 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	go func() {
 		defer close(ch)
 		defer resp.Body.Close()
-		c.readSSE(ctx, resp, ch)
+		c.readSSE(ctx, log, resp, ch)
 		log.Debug("stream completed")
 	}()
 
 	return ch, nil
 }
 
-func (c *Client) readSSE(ctx context.Context, resp *http.Response, ch chan<- StreamEvent) {
+func (c *Client) readSSE(ctx context.Context, log *slog.Logger, resp *http.Response, ch chan<- StreamEvent) {
 	scanner := bufio.NewScanner(resp.Body)
 
 	// Track in-progress tool_use blocks by index
@@ -243,6 +248,8 @@ func (c *Client) readSSE(ctx context.Context, resp *http.Response, ch chan<- Str
 		if err := json.Unmarshal([]byte(data), &parsed); err != nil {
 			continue
 		}
+
+		log.Debug("sse event", "type", parsed.Type)
 
 		switch parsed.Type {
 		case "content_block_start":

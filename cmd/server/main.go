@@ -28,7 +28,15 @@ func main() {
 		pdfDir = v
 	}
 
-	logger := slog.Default()
+	logLevel := new(slog.LevelVar)
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		if err := logLevel.UnmarshalText([]byte(v)); err != nil {
+			slog.Error("invalid LOG_LEVEL", "value", v, "error", err)
+			os.Exit(1)
+		}
+	}
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})
+	logger := slog.New(handler)
 
 	db, err := store.Open(dbPath, logger)
 	if err != nil {

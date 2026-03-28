@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -605,6 +606,163 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 		}
 		require.NotNil(t, toolCallEvent)
 	})
+}
+
+func TestSendMessage_LogsToolLoopIteration(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	storage := pdf.NewStorage(t.TempDir())
+
+	p := store.Paper{
+		ID:        "paper-1",
+		Title:     "Test Paper",
+		FilePath:  "/test.pdf",
+		FileSize:  1000,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	mock := &multiTurnStreamer{
+		calls: [][]anthropic.StreamEvent{
+			{
+				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
+				{Type: "message_stop"},
+			},
+			{
+				{Type: "content_block_delta", Text: "Done"},
+				{Type: "message_stop"},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	mux := NewMux(tdb.DB, storage, mock, logger)
+
+	body := `{"content":"Go to page 3"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "tool_loop_iteration")
+	assert.Contains(t, logOutput, "tool_call")
+	assert.Contains(t, logOutput, "go_to_page")
+}
+
+func TestSendMessage_LogsToolExecutionResults(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	storage := pdf.NewStorage(t.TempDir())
+
+	p := store.Paper{
+		ID:        "paper-1",
+		Title:     "Test Paper",
+		FilePath:  "/test.pdf",
+		FileSize:  1000,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	mock := &multiTurnStreamer{
+		calls: [][]anthropic.StreamEvent{
+			{
+				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":2}`},
+				{Type: "message_stop"},
+			},
+			{
+				{Type: "content_block_delta", Text: "Done"},
+				{Type: "message_stop"},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	mux := NewMux(tdb.DB, storage, mock, logger)
+
+	body := `{"content":"Go to page 2"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "tool_result")
+	assert.Contains(t, logOutput, "result_length")
+	assert.Contains(t, logOutput, "duration")
+}
+
+func TestSendMessage_LogsFinalResponseSummary(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	storage := pdf.NewStorage(t.TempDir())
+
+	p := store.Paper{
+		ID:        "paper-1",
+		Title:     "Test Paper",
+		FilePath:  "/test.pdf",
+		FileSize:  1000,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	mock := &multiTurnStreamer{
+		calls: [][]anthropic.StreamEvent{
+			{
+				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":1}`},
+				{Type: "message_stop"},
+			},
+			{
+				{Type: "content_block_delta", Text: "Here is page 1"},
+				{Type: "message_stop"},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	mux := NewMux(tdb.DB, storage, mock, logger)
+
+	body := `{"content":"Show page 1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "response_complete")
+	assert.Contains(t, logOutput, "response_length")
+	assert.Contains(t, logOutput, "tool_iterations")
+	assert.Contains(t, logOutput, "total_duration")
 }
 
 // createTestPDFWithText is a helper that creates a valid PDF with text.

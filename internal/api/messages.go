@@ -158,6 +158,8 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 		}
 
 		var fullText strings.Builder
+		responseStart := time.Now()
+		var toolIterations int
 
 		// Tool execution loop
 		for i := 0; i < maxToolLoopIterations; i++ {
@@ -187,10 +189,14 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 				break
 			}
 
+			toolIterations++
+			logger.Info("tool_loop_iteration", "iteration", toolIterations, "tool_call_count", len(toolCalls))
+
 			// Process tool calls
 			// Build assistant message with tool_use blocks
 			var assistantBlocks []anthropic.ContentBlock
 			for _, tc := range toolCalls {
+				logger.Debug("tool_call", "name", tc.ToolName, "args", tc.ToolInput)
 				assistantBlocks = append(assistantBlocks, anthropic.ContentBlock{
 					Type:  "tool_use",
 					ID:    tc.ToolUseID,
@@ -215,7 +221,13 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			// Execute tools and build tool_result blocks
 			var resultBlocks []anthropic.ContentBlock
 			for _, tc := range toolCalls {
+				toolStart := time.Now()
 				result := executeToolCall(tc.ToolName, tc.ToolInput, pdfPath, logger)
+				logger.Info("tool_result",
+					"name", tc.ToolName,
+					"result_length", len(result),
+					"duration", time.Since(toolStart),
+				)
 				resultBlocks = append(resultBlocks, anthropic.ContentBlock{
 					Type:      "tool_result",
 					ToolUseID: tc.ToolUseID,
@@ -229,6 +241,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 				ContentBlocks: resultBlocks,
 			})
 		}
+
+		logger.Info("response_complete",
+			"response_length", fullText.Len(),
+			"tool_iterations", toolIterations,
+			"total_duration", time.Since(responseStart),
+		)
 
 		// Store assistant message (final text only)
 		assistantID, err := newUUID()
