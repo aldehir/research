@@ -60,8 +60,6 @@ export interface Message {
 	chat_session_id: string;
 	role: 'user' | 'assistant';
 	content: string;
-	selected_text?: string;
-	surrounding_text?: string;
 	created_at: string;
 }
 
@@ -106,19 +104,11 @@ export async function sendMessage(
 	paperId: string,
 	chatId: string,
 	content: string,
-	selectedText: string | undefined,
-	surroundingText: string | undefined,
 	onDelta: (text: string) => void,
 	onDone: () => void,
 	onError: (error: string) => void
 ): Promise<void> {
 	const reqBody: Record<string, string> = { content };
-	if (selectedText) {
-		reqBody.selected_text = selectedText;
-	}
-	if (surroundingText) {
-		reqBody.surrounding_text = surroundingText;
-	}
 
 	let response: Response;
 	try {

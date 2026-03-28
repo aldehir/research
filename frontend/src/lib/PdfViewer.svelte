@@ -4,8 +4,6 @@
 	import type { PDFDocumentProxy } from 'pdfjs-dist';
 	import { getPdfUrl } from '$lib/api';
 	import { clampPage, zoomIn, zoomOut, formatZoom, DEFAULT_SCALE } from '$lib/pdf-utils';
-	import { extractPageText, extractSurroundingContext } from '$lib/text-context';
-	import { setSelection, clearSelection, getSelectedText } from '$lib/selection.svelte';
 	import { renderPage } from '$lib/pdf-render';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
@@ -149,44 +147,6 @@
 		if (pdfDoc) renderAllPages(pdfDoc, scale);
 	}
 
-	function handleMouseUp(): void {
-		const selection = window.getSelection();
-		if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-			clearSelection();
-			return;
-		}
-
-		const selected = selection.toString();
-		const anchorNode = selection.anchorNode;
-		if (!anchorNode) {
-			clearSelection();
-			return;
-		}
-
-		let pageWrapper: HTMLDivElement | null = null;
-		for (const [, el] of pageElements) {
-			if (el.contains(anchorNode)) {
-				pageWrapper = el;
-				break;
-			}
-		}
-
-		if (!pageWrapper) {
-			clearSelection();
-			return;
-		}
-
-		const textLayer = pageWrapper.querySelector('.textLayer') as HTMLDivElement | null;
-		if (!textLayer) {
-			clearSelection();
-			return;
-		}
-
-		const pageText = extractPageText(textLayer);
-		const surrounding = extractSurroundingContext(selected, pageText);
-		setSelection(selected, surrounding);
-	}
-
 	// Single effect: only tracks paperId, nothing else
 	$effect(() => {
 		const id = paperId;
@@ -225,7 +185,7 @@
 		</div>
 	</div>
 
-	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onmouseup={handleMouseUp}>
+	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll}>
 		{#if loading}
 			<p class="status">Loading PDF...</p>
 		{:else if error}

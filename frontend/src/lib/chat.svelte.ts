@@ -47,17 +47,13 @@ export async function deleteSession(paperId: string, chatId: string): Promise<vo
 export async function sendChatMessage(
 	paperId: string,
 	chatId: string,
-	content: string,
-	selectedText?: string,
-	surroundingText?: string
+	content: string
 ): Promise<void> {
 	const userMessage: Message = {
 		id: generateId(),
 		chat_session_id: chatId,
 		role: 'user',
 		content,
-		selected_text: selectedText,
-		surrounding_text: surroundingText,
 		created_at: new Date().toISOString()
 	};
 	messages = [...messages, userMessage];
@@ -68,8 +64,6 @@ export async function sendChatMessage(
 		paperId,
 		chatId,
 		content,
-		selectedText,
-		surroundingText,
 		(text: string) => {
 			streamingContent += text;
 		},

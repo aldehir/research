@@ -172,40 +172,11 @@ describe('sendMessage', () => {
 		const onDone = vi.fn();
 		const onError = vi.fn();
 
-		await sendMessage(paperId, chatId, 'Hi', undefined, undefined, onDelta, onDone, onError);
+		await sendMessage(paperId, chatId, 'Hi', onDelta, onDone, onError);
 
 		expect(deltas).toEqual(['Hello', ' world']);
 		expect(onDone).toHaveBeenCalledOnce();
 		expect(onError).not.toHaveBeenCalled();
-	});
-
-	it('sends selected_text and surrounding_text when provided', async () => {
-		const stream = makeSSEStream([
-			'data: {"type":"done"}'
-		]);
-
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-			ok: true,
-			body: stream
-		}));
-
-		await sendMessage(
-			paperId, chatId, 'explain this', 'some text', 'context around',
-			vi.fn(), vi.fn(), vi.fn()
-		);
-
-		expect(fetch).toHaveBeenCalledWith(
-			`/api/papers/${paperId}/chats/${chatId}/messages`,
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					content: 'explain this',
-					selected_text: 'some text',
-					surrounding_text: 'context around'
-				})
-			}
-		);
 	});
 
 	it('calls onError when response is not ok', async () => {
@@ -218,7 +189,7 @@ describe('sendMessage', () => {
 		const onDone = vi.fn();
 		const onError = vi.fn();
 
-		await sendMessage(paperId, chatId, 'Hi', undefined, undefined, onDelta, onDone, onError);
+		await sendMessage(paperId, chatId, 'Hi', onDelta, onDone, onError);
 
 		expect(onError).toHaveBeenCalledWith('bad request');
 		expect(onDone).not.toHaveBeenCalled();
@@ -229,7 +200,7 @@ describe('sendMessage', () => {
 
 		const onError = vi.fn();
 
-		await sendMessage(paperId, chatId, 'Hi', undefined, undefined, vi.fn(), vi.fn(), onError);
+		await sendMessage(paperId, chatId, 'Hi', vi.fn(), vi.fn(), onError);
 
 		expect(onError).toHaveBeenCalledWith('Network error');
 	});
@@ -254,7 +225,7 @@ describe('sendMessage', () => {
 		const deltas: string[] = [];
 		const onDone = vi.fn();
 
-		await sendMessage(paperId, chatId, 'Hi', undefined, undefined,
+		await sendMessage(paperId, chatId, 'Hi',
 			(t) => deltas.push(t), onDone, vi.fn());
 
 		expect(deltas).toEqual(['hi']);

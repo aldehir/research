@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { getIsStreaming, sendChatMessage, getActiveSessionId } from '$lib/chat.svelte';
-	import { getSelectedText, getSurroundingText, clearSelection } from '$lib/selection.svelte';
 
 	interface Props {
 		paperId: string;
@@ -21,24 +20,13 @@
 		const chatId = getActiveSessionId();
 		if (!content || !chatId || getIsStreaming()) return;
 
-		const selectedText = getSelectedText() || undefined;
-		const surroundingText = getSurroundingText() || undefined;
-
 		inputText = '';
-		clearSelection();
 
-		await sendChatMessage(paperId, chatId, content, selectedText, surroundingText);
+		await sendChatMessage(paperId, chatId, content);
 	}
 </script>
 
 <div class="input-area">
-	{#if getSelectedText()}
-		<div class="selection-badge">
-			<span class="badge-label">Selected text:</span>
-			<span class="badge-text">{getSelectedText().slice(0, 80)}{getSelectedText().length > 80 ? '...' : ''}</span>
-			<button class="badge-clear" onclick={clearSelection} aria-label="Clear selection">&times;</button>
-		</div>
-	{/if}
 	<div class="input-row">
 		<textarea
 			bind:value={inputText}
@@ -61,43 +49,6 @@
 	.input-area {
 		border-top: 1px solid #ddd;
 		padding: 0.75rem;
-	}
-
-	.selection-badge {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.4rem 0.6rem;
-		margin-bottom: 0.5rem;
-		background: #fff3cd;
-		border-radius: 4px;
-		font-size: 0.8rem;
-	}
-
-	.badge-label {
-		font-weight: 600;
-		white-space: nowrap;
-	}
-
-	.badge-text {
-		flex: 1;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		color: #555;
-	}
-
-	.badge-clear {
-		border: none;
-		background: none;
-		cursor: pointer;
-		font-size: 1rem;
-		color: #999;
-		padding: 0 0.25rem;
-	}
-
-	.badge-clear:hover {
-		color: #333;
 	}
 
 	.input-row {
