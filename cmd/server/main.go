@@ -39,8 +39,13 @@ func main() {
 
 	var chat api.ChatStreamer
 	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		chat = anthropic.NewClient(apiKey)
-		logger.Info("Anthropic API client initialized")
+		var opts []anthropic.Option
+		if model := os.Getenv("ANTHROPIC_MODEL"); model != "" {
+			opts = append(opts, anthropic.WithModel(model))
+		}
+		client := anthropic.NewClient(apiKey, opts...)
+		chat = client
+		logger.Info("Anthropic API client initialized", "model", client.Model)
 	} else {
 		logger.Warn("ANTHROPIC_API_KEY not set, chat features will be unavailable")
 	}

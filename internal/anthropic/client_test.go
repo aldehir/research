@@ -20,6 +20,16 @@ func TestNewClient_Defaults(t *testing.T) {
 	assert.NotNil(t, c.HTTPClient)
 }
 
+func TestNewClient_WithModel(t *testing.T) {
+	c := NewClient("test-key", WithModel("claude-haiku-4-5-20251001"))
+	assert.Equal(t, "claude-haiku-4-5-20251001", c.Model)
+}
+
+func TestNewClient_WithModel_Empty_UsesDefault(t *testing.T) {
+	c := NewClient("test-key", WithModel(""))
+	assert.Equal(t, "claude-sonnet-4-20250514", c.Model)
+}
+
 func TestStream_ReceivesTextDeltas(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)
@@ -98,7 +108,7 @@ func TestStream_ChannelClosesAfterMessageStop(t *testing.T) {
 	assert.Greater(t, count, 0)
 }
 
-func TestStream_APIError(t *testing.T) {
+func TestStream_APIError_IncludesResponseBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -114,6 +124,7 @@ func TestStream_APIError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "401")
+	assert.Contains(t, err.Error(), "invalid api key")
 }
 
 func TestStream_ContextCancellation(t *testing.T) {

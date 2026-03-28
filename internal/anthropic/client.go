@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -38,14 +39,28 @@ type StreamEvent struct {
 	Error string
 }
 
-func NewClient(apiKey string) *Client {
-	return &Client{
+type Option func(*Client)
+
+func WithModel(model string) Option {
+	return func(c *Client) {
+		if model != "" {
+			c.Model = model
+		}
+	}
+}
+
+func NewClient(apiKey string, opts ...Option) *Client {
+	c := &Client{
 		APIKey:     apiKey,
 		BaseURL:    "https://api.anthropic.com",
 		HTTPClient: &http.Client{Timeout: 5 * time.Minute},
 		Model:      "claude-sonnet-4-20250514",
 		Logger:     slog.Default(),
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c *Client) logger() *slog.Logger {
@@ -112,9 +127,10 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		log.Error("anthropic api error", "status", resp.StatusCode)
-		return nil, fmt.Errorf("anthropic api: status %d", resp.StatusCode)
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Error("anthropic api error", "status", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("anthropic api: status %d: %s", resp.StatusCode, string(body))
 	}
 
 	ch := make(chan StreamEvent)
