@@ -14,3 +14,7 @@
 - [x] 10 — Implement Anthropic tool calling for PDF interactions `COMPLETE`
 - [x] 11 — Add detailed logging for LLM messages and tool calling `COMPLETE`
 - [x] 12 — Add streaming output to chat panel `COMPLETE`
+- [ ] 13 — Mobile-first slide-over panel layout `TODO`
+- [ ] 14 — Add streaming markdown renderer to chat panel `TODO`
+- [ ] 15 — Implement snapshot_page tool `TODO`
+- [ ] 16 — Background PDF text extraction and search index `TODO`

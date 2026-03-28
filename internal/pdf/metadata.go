@@ -1,10 +1,9 @@
 package pdf
 
 import (
-	"os"
+	"fmt"
 
-	pdfcpuapi "github.com/pdfcpu/pdfcpu/pkg/api"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	gopdf "github.com/ledongthuc/pdf"
 )
 
 // Metadata holds extracted PDF document metadata.
@@ -18,22 +17,18 @@ type Metadata struct {
 
 // ExtractMetadata reads PDF metadata from the file at the given path.
 func ExtractMetadata(path string) (Metadata, error) {
-	f, err := os.Open(path)
+	f, r, err := gopdf.Open(path)
 	if err != nil {
-		return Metadata{}, err
+		return Metadata{}, fmt.Errorf("open pdf: %w", err)
 	}
 	defer f.Close()
 
-	info, err := pdfcpuapi.PDFInfo(f, path, nil, false, model.NewDefaultConfiguration())
-	if err != nil {
-		return Metadata{}, err
-	}
-
+	info := r.Trailer().Key("Info")
 	return Metadata{
-		Title:     info.Title,
-		Author:    info.Author,
-		Subject:   info.Subject,
-		CreatedAt: info.CreationDate,
-		PageCount: info.PageCount,
+		Title:     info.Key("Title").Text(),
+		Author:    info.Key("Author").Text(),
+		Subject:   info.Key("Subject").Text(),
+		CreatedAt: info.Key("CreationDate").Text(),
+		PageCount: r.NumPage(),
 	}, nil
 }

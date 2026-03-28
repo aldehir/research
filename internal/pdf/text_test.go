@@ -39,6 +39,17 @@ func TestExtractPageText_InvalidPage(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestExtractPageText_SeparateWords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.pdf")
+	createTestPDFSeparateWords(t, path)
+
+	text, err := ExtractPageText(path, 1)
+	require.NoError(t, err)
+	assert.Contains(t, text, "Hello")
+	assert.Contains(t, text, "World")
+	assert.Contains(t, text, "Second")
+}
+
 func TestSearchText(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.pdf")
 	createTestPDFWithText(t, path, "Hello World")

@@ -1,8 +1,9 @@
 package pdf
 
 import (
-	"bytes"
 	"fmt"
+	"os/exec"
+	"strconv"
 	"strings"
 
 	gopdf "github.com/ledongthuc/pdf"
@@ -24,63 +25,53 @@ func PageCount(path string) (int, error) {
 	return r.NumPage(), nil
 }
 
-// ExtractPageText extracts the text content of a specific page (1-based).
+// ExtractPageText extracts the text content of a specific page (1-based)
+// using pdftotext with layout preservation.
 func ExtractPageText(path string, pageNum int) (string, error) {
-	f, r, err := gopdf.Open(path)
+	count, err := PageCount(path)
 	if err != nil {
-		return "", fmt.Errorf("open pdf: %w", err)
+		return "", err
 	}
-	defer f.Close()
-
-	if pageNum < 1 || pageNum > r.NumPage() {
-		return "", fmt.Errorf("page %d out of range (1-%d)", pageNum, r.NumPage())
+	if pageNum < 1 || pageNum > count {
+		return "", fmt.Errorf("page %d out of range (1-%d)", pageNum, count)
 	}
 
-	page := r.Page(pageNum)
-	if page.V.IsNull() {
-		return "", fmt.Errorf("page %d not found", pageNum)
+	pageStr := strconv.Itoa(pageNum)
+	out, err := exec.Command("pdftotext", "-layout", "-f", pageStr, "-l", pageStr, path, "-").Output()
+	if err != nil {
+		return "", fmt.Errorf("pdftotext: %w", err)
 	}
-
-	var buf bytes.Buffer
-	texts := page.Content().Text
-	for _, t := range texts {
-		buf.WriteString(t.S)
-	}
-	return buf.String(), nil
+	return strings.TrimRight(string(out), "\n\f"), nil
 }
 
 // SearchText searches all pages of a PDF for the given query string.
 // Returns matching pages with text snippets.
 func SearchText(path string, query string) ([]SearchResult, error) {
-	f, r, err := gopdf.Open(path)
+	count, err := PageCount(path)
 	if err != nil {
-		return nil, fmt.Errorf("open pdf: %w", err)
+		return nil, err
 	}
-	defer f.Close()
 
+	// Extract all text at once for search
+	out, err := exec.Command("pdftotext", "-layout", path, "-").Output()
+	if err != nil {
+		return nil, fmt.Errorf("pdftotext: %w", err)
+	}
+
+	// pdftotext separates pages with form feed (\f)
+	pages := strings.Split(string(out), "\f")
 	queryLower := strings.ToLower(query)
 	var results []SearchResult
 
-	for i := 1; i <= r.NumPage(); i++ {
-		page := r.Page(i)
-		if page.V.IsNull() {
-			continue
-		}
-
-		var buf bytes.Buffer
-		for _, t := range page.Content().Text {
-			buf.WriteString(t.S)
-		}
-		pageText := buf.String()
-
+	for i := 0; i < len(pages) && i < count; i++ {
+		pageText := pages[i]
 		if idx := strings.Index(strings.ToLower(pageText), queryLower); idx >= 0 {
-			// Extract snippet around the match
 			start := max(0, idx-50)
 			end := min(len(pageText), idx+len(query)+50)
 			snippet := pageText[start:end]
 			results = append(results, SearchResult{
-				Page:    i,
-				Snippet: snippet,
+				Page:    i + 1,
+				Snippet: strings.TrimSpace(snippet),
 			})
 		}
 	}
