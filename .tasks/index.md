@@ -2,4 +2,4 @@
 
 ## Tasks
 
-(no tasks yet)
+- [ ] 01 — Fix papers not displaying on initial page load `COMPLETE`

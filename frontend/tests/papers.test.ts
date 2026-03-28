@@ -85,6 +85,30 @@ describe('paper store', () => {
 		expect(papersStore.papers).toEqual([mockPaper2]);
 	});
 
+	it('sets loading true while fetching and false after', async () => {
+		let resolveFetch: (papers: api.Paper[]) => void;
+		vi.mocked(api.listPapers).mockImplementation(
+			() => new Promise(resolve => { resolveFetch = resolve; })
+		);
+
+		expect(papersStore.loading).toBe(false);
+
+		const loadPromise = papersStore.load();
+		expect(papersStore.loading).toBe(true);
+
+		resolveFetch!([mockPaper]);
+		await loadPromise;
+		expect(papersStore.loading).toBe(false);
+		expect(papersStore.papers).toEqual([mockPaper]);
+	});
+
+	it('sets loading false on fetch error', async () => {
+		vi.mocked(api.listPapers).mockRejectedValue(new Error('network'));
+
+		await papersStore.load().catch(() => {});
+		expect(papersStore.loading).toBe(false);
+	});
+
 	it('clears selection when selected paper is removed', async () => {
 		vi.mocked(api.listPapers).mockResolvedValue([mockPaper, mockPaper2]);
 		await papersStore.load();

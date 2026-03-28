@@ -3,6 +3,7 @@ import type { Paper } from '$lib/api';
 
 class PapersStore {
 	papers = $state<Paper[]>([]);
+	loading = $state(false);
 	selectedId = $state<string | null>(null);
 
 	get selectedPaper(): Paper | null {
@@ -10,7 +11,12 @@ class PapersStore {
 	}
 
 	async load(): Promise<void> {
-		this.papers = await listPapers();
+		this.loading = true;
+		try {
+			this.papers = await listPapers();
+		} finally {
+			this.loading = false;
+		}
 	}
 
 	select(id: string): void {

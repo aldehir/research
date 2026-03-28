@@ -10,8 +10,12 @@
 	let uploading = $state(false);
 	let uploadError = $state<string | null>(null);
 
-	onMount(() => {
-		papersStore.load().catch(e => console.error('Failed to load papers:', e));
+	onMount(async () => {
+		try {
+			await papersStore.load();
+		} catch (e) {
+			console.error('Failed to load papers:', e);
+		}
 	});
 
 	async function handleHeaderUpload(event: Event) {
