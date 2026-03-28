@@ -58,3 +58,13 @@ Do not skip the failing test step. Do not write production code without a test.
 - TypeScript: strict mode, no `any`
 - Prefer small functions over comments
 - No dead code — delete unused code, don't comment it out
+
+## Logging
+
+All backend code must use structured logging via `log/slog`:
+
+- **Every exported function that does meaningful work** should log its actions — at minimum on entry/completion and on errors
+- Use `slog.Logger` as a dependency (accept via constructor or parameter), never call `slog.Default()` in library code
+- Use structured key-value pairs, not formatted strings: `logger.Info("paper indexed", "paper_id", id, "pages", n)`
+- Log levels: `Info` for operations (HTTP requests, indexing, DB writes), `Warn` for recoverable issues, `Error` for failures, `Debug` for internals (tool args, raw responses)
+- Include relevant IDs and durations so logs are useful for debugging

@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"database/sql"
+	"log/slog"
 	"path/filepath"
 	"testing"
 
@@ -49,7 +50,7 @@ func TestIndexer_IndexPaper(t *testing.T) {
 	pdfPath := filepath.Join(t.TempDir(), "test.pdf")
 	createTestPDFWithPages(t, pdfPath, []string{"Page one content", "Page two content"})
 
-	idx := NewIndexer(db)
+	idx := NewIndexer(db, slog.Default())
 	err := idx.IndexPaper("paper-1", pdfPath)
 	require.NoError(t, err)
 
@@ -70,7 +71,7 @@ func TestIndexer_IndexPaper_SetsTimestamp(t *testing.T) {
 	pdfPath := filepath.Join(t.TempDir(), "test.pdf")
 	createTestPDFWithPages(t, pdfPath, []string{"Content"})
 
-	idx := NewIndexer(db)
+	idx := NewIndexer(db, slog.Default())
 	require.NoError(t, idx.IndexPaper("paper-1", pdfPath))
 
 	// text_indexed_at should be set
@@ -87,7 +88,7 @@ func TestIndexer_IndexPaper_SkipsAlreadyIndexed(t *testing.T) {
 	pdfPath := filepath.Join(t.TempDir(), "test.pdf")
 	createTestPDFWithPages(t, pdfPath, []string{"Content"})
 
-	idx := NewIndexer(db)
+	idx := NewIndexer(db, slog.Default())
 	require.NoError(t, idx.IndexPaper("paper-1", pdfPath))
 
 	// Mark as indexed
@@ -114,7 +115,7 @@ func TestIndexer_IndexUnindexed(t *testing.T) {
 	// Mark paper-2 as already indexed
 	require.NoError(t, store.SetTextIndexedAt(db, "paper-2", "2026-03-28T12:00:00Z"))
 
-	idx := NewIndexer(db)
+	idx := NewIndexer(db, slog.Default())
 	err := idx.IndexUnindexed(func(paperID string) string {
 		if paperID == "paper-1" {
 			return pdf1

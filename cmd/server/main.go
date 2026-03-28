@@ -61,7 +61,7 @@ func main() {
 	storage := pdf.NewStorage(pdfDir)
 
 	// Start background PDF text indexer
-	indexer := pdf.NewIndexer(db)
+	indexer := pdf.NewIndexer(db, logger)
 	go runIndexer(indexer, storage, logger)
 
 	mux := api.NewMux(db, storage, chat, logger)
