@@ -540,8 +540,6 @@
 	.pages-container {
 		flex: 1;
 		overflow: auto;
-		overflow-anchor: none;
-		position: relative;
 		background: #888;
 		display: flex;
 		flex-direction: column;
