@@ -7,6 +7,8 @@
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
 	import { setPages, setCurrentPage, setSelectedText } from '$lib/pdf-context.svelte';
+	import { extractOutline, type TocEntry } from '$lib/pdf-outline';
+	import TocPanel from '$lib/TocPanel.svelte';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -59,6 +61,9 @@
 	let renderGeneration = 0;
 	let resizeObserver: ResizeObserver | null = null;
 	let isFitToWidth = $state(true);
+
+	let tocEntries = $state<TocEntry[]>([]);
+	let tocVisible = $state(false);
 
 	let zoomDisplay = $derived(formatZoom(scale));
 	let jumpPageInput = $state('');
@@ -157,6 +162,8 @@
 			pdfDoc = null;
 			pages = [];
 		}
+		tocEntries = [];
+		tocVisible = false;
 
 		try {
 			const url = getPdfUrl(id);
@@ -183,6 +190,10 @@
 			totalPages = doc.numPages;
 			currentPage = 1;
 			isFitToWidth = true;
+
+			// Extract table of contents
+			tocEntries = await extractOutline(doc);
+			tocVisible = tocEntries.length > 0;
 
 			// Compute initial fit-to-width scale
 			if (scrollContainer && allPages.length > 0) {
@@ -449,6 +460,15 @@
 <div class="pdf-viewer" tabindex="-1">
 	<div class="toolbar">
 		<div class="toolbar-group">
+			{#if tocEntries.length > 0}
+				<button
+					onclick={() => tocVisible = !tocVisible}
+					class:active={tocVisible}
+					aria-label="Table of contents"
+					title="Table of contents"
+				>&#9776;</button>
+				<span class="toolbar-divider"></span>
+			{/if}
 			<button
 				onclick={() => goToPage(currentPage - 1)}
 				disabled={currentPage <= 1}
@@ -482,8 +502,12 @@
 		</div>
 	</div>
 
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onwheel={handleWheel}>
+	<div class="viewer-body">
+		{#if tocVisible}
+			<TocPanel entries={tocEntries} {currentPage} onNavigate={goToPage} />
+		{/if}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onwheel={handleWheel}>
 		{#if loading}
 			<p class="status">Loading PDF...</p>
 		{:else if error}
@@ -498,6 +522,7 @@
 				</div>
 			{/each}
 		{/if}
+		</div>
 	</div>
 </div>
 
@@ -563,6 +588,25 @@
 		border-radius: 4px;
 		font-size: 0.85rem;
 		text-align: center;
+	}
+
+	.toolbar-divider {
+		width: 1px;
+		height: 1.2rem;
+		background: #ccc;
+	}
+
+	.viewer-body {
+		flex: 1;
+		display: flex;
+		min-height: 0;
+	}
+
+	.viewer-body :global(.toc-panel) {
+		width: 260px;
+		min-width: 200px;
+		flex-shrink: 0;
+		border-right: 1px solid #3a3a52;
 	}
 
 	.pages-container {

@@ -10,4 +10,5 @@
 - [x] 06 — Fix PDF text selection span geometry `COMPLETE`
 - [x] 07 — Attach selected text and page content to chat messages `COMPLETE`
 - [x] 08 — Stabilize scrollbar for virtual PDF rendering `COMPLETE`
-- [ ] 09 — Add table of contents with page jumping `TODO`
+- [x] 09 — Add table of contents with page jumping `COMPLETE`
+- [ ] 10 — Implement Anthropic tool calling for PDF interactions `TODO`
