@@ -6,6 +6,8 @@
 	import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 	import { getPdfUrl } from '$lib/api';
 	import { clampPage, zoomIn, zoomOut, formatZoom, DEFAULT_SCALE } from '$lib/pdf-utils';
+	import { extractPageText, extractSurroundingContext } from '$lib/text-context';
+	import { setSelection, clearSelection, getSelectedText } from '$lib/selection.svelte';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -27,6 +29,7 @@
 
 	let zoomDisplay = $derived(formatZoom(scale));
 	let jumpPageInput = $state('');
+	let hasSelection = $state(false);
 
 	async function loadPdf(id: string): Promise<void> {
 		loading = true;
@@ -159,6 +162,49 @@
 		scale = zoomOut(scale);
 	}
 
+	function handleMouseUp(): void {
+		const selection = window.getSelection();
+		if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+			clearSelection();
+			hasSelection = false;
+			return;
+		}
+
+		const selected = selection.toString();
+		const anchorNode = selection.anchorNode;
+		if (!anchorNode) {
+			clearSelection();
+			hasSelection = false;
+			return;
+		}
+
+		let pageWrapper: HTMLDivElement | null = null;
+		for (const [, el] of pageElements) {
+			if (el.contains(anchorNode)) {
+				pageWrapper = el;
+				break;
+			}
+		}
+
+		if (!pageWrapper) {
+			clearSelection();
+			hasSelection = false;
+			return;
+		}
+
+		const textLayer = pageWrapper.querySelector('.textLayer') as HTMLDivElement | null;
+		if (!textLayer) {
+			clearSelection();
+			hasSelection = false;
+			return;
+		}
+
+		const pageText = extractPageText(textLayer);
+		const surrounding = extractSurroundingContext(selected, pageText);
+		setSelection(selected, surrounding);
+		hasSelection = true;
+	}
+
 	$effect(() => {
 		loadPdf(paperId);
 	});
@@ -202,7 +248,13 @@
 		</div>
 	</div>
 
-	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll}>
+	{#if hasSelection}
+		<div class="selection-indicator">
+			Text selected &mdash; use chat to ask about it
+		</div>
+	{/if}
+
+	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onmouseup={handleMouseUp}>
 		{#if loading}
 			<p class="status">Loading PDF...</p>
 		{:else if error}
@@ -302,6 +354,16 @@
 		bottom: 0;
 		overflow: hidden;
 		line-height: 1;
+	}
+
+	.selection-indicator {
+		padding: 0.4rem 1rem;
+		background: #e3f2fd;
+		color: #1565c0;
+		font-size: 0.8rem;
+		text-align: center;
+		border-bottom: 1px solid #90caf9;
+		flex-shrink: 0;
 	}
 
 	.status {

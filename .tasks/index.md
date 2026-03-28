@@ -24,7 +24,7 @@
 - [x] 05 — PDF Serving `COMPLETE`
 - [x] 06 — Frontend: Paper Library `COMPLETE`
 - [x] 07 — Frontend: PDF Viewer `COMPLETE`
-- [ ] 08 — Text Selection & Context `TODO`
+- [x] 08 — Text Selection & Context `COMPLETE`
 - [ ] 09 — Chat Sessions API `TODO`
 - [ ] 10 — Anthropic Client `TODO`
 - [ ] 11 — Messages Endpoint + SSE `TODO`
