@@ -2,6 +2,7 @@
 	import { getMessages, getStreamSegments, getStreamingContent, getIsStreaming, getMessageSegments } from '$lib/chat.svelte';
 	import type { StreamSegment } from '$lib/chat.svelte';
 	import { formatToolLabel, formatToolArgs } from '$lib/tool-display';
+	import MarkdownRenderer from '$lib/MarkdownRenderer.svelte';
 	import { tick } from 'svelte';
 
 	let container: HTMLDivElement | undefined = $state();
@@ -29,6 +30,32 @@
 
 	function segmentKey(messageId: string, index: number): string {
 		return `${messageId}-${index}`;
+	}
+
+	type GroupedSegment =
+		| { type: 'markdown'; content: string }
+		| { type: 'tool'; segment: StreamSegment & { type: 'tool' }; index: number };
+
+	function groupSegments(segs: StreamSegment[]): GroupedSegment[] {
+		const groups: GroupedSegment[] = [];
+		let textBuffer = '';
+
+		for (let i = 0; i < segs.length; i++) {
+			const seg = segs[i];
+			if (seg.type === 'text') {
+				textBuffer += seg.content;
+			} else {
+				if (textBuffer) {
+					groups.push({ type: 'markdown', content: textBuffer });
+					textBuffer = '';
+				}
+				groups.push({ type: 'tool', segment: seg, index: i });
+			}
+		}
+		if (textBuffer) {
+			groups.push({ type: 'markdown', content: textBuffer });
+		}
+		return groups;
 	}
 
 	$effect(() => {
@@ -60,12 +87,12 @@
 	</div>
 {/snippet}
 
-{#snippet segmentList(segments: StreamSegment[], messageId: string)}
-	{#each segments as segment, i}
-		{#if segment.type === 'text'}
-			{segment.content}
+{#snippet segmentList(segs: StreamSegment[], messageId: string)}
+	{#each groupSegments(segs) as group}
+		{#if group.type === 'markdown'}
+			<MarkdownRenderer content={group.content} />
 		{:else}
-			{@render toolChip(segment, segmentKey(messageId, i))}
+			{@render toolChip(group.segment, segmentKey(messageId, group.index))}
 		{/if}
 	{/each}
 {/snippet}
@@ -78,8 +105,12 @@
 			<div class="message {message.role}">
 				<div class="role-label">{message.role === 'user' ? 'You' : 'Assistant'}</div>
 				{#if message.role === 'assistant' && getMessageSegments(message.id)}
-					<div class="content">
+					<div class="content assistant-content">
 						{@render segmentList(getMessageSegments(message.id)!, message.id)}
+					</div>
+				{:else if message.role === 'assistant'}
+					<div class="content assistant-content">
+						<MarkdownRenderer content={message.content} />
 					</div>
 				{:else}
 					<div class="content">{message.content}</div>
@@ -90,7 +121,7 @@
 			{#if segments.length > 0}
 				<div class="message assistant">
 					<div class="role-label">Assistant</div>
-					<div class="content">
+					<div class="content assistant-content">
 						{@render segmentList(segments, 'streaming')}
 					</div>
 				</div>
@@ -150,6 +181,10 @@
 		line-height: 1.5;
 		white-space: pre-wrap;
 		word-break: break-word;
+	}
+
+	.content.assistant-content {
+		white-space: normal;
 	}
 
 	.thinking {
