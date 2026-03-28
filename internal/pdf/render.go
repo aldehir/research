@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/draw"
 	"image/png"
 	"os/exec"
 	"strconv"
+
+	xdraw "golang.org/x/image/draw"
 )
 
 // RenderPage renders a single PDF page to a PNG image using pdftoppm.
@@ -42,12 +45,36 @@ func RenderPage(path string, pageNum int) ([]byte, error) {
 	}
 
 	cropped := cropWhitespace(img, 20)
+	final := constrainSize(cropped, maxImageDimension)
 
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, cropped); err != nil {
+	if err := png.Encode(&buf, final); err != nil {
 		return nil, fmt.Errorf("encode cropped png: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+// maxImageDimension is the maximum width or height for rendered images.
+// Matches Anthropic's recommended tile size to avoid unnecessary scaling.
+const maxImageDimension = 1568
+
+// constrainSize scales the image down proportionally if either dimension
+// exceeds maxPx. Returns the original image if already within bounds.
+func constrainSize(img image.Image, maxPx int) image.Image {
+	bounds := img.Bounds()
+	w, h := bounds.Dx(), bounds.Dy()
+
+	if w <= maxPx && h <= maxPx {
+		return img
+	}
+
+	scale := float64(maxPx) / float64(max(w, h))
+	newW := int(float64(w) * scale)
+	newH := int(float64(h) * scale)
+
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
+	return dst
 }
 
 // cropWhitespace finds the bounding box of non-white pixels and returns

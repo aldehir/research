@@ -70,6 +70,23 @@ func TestRenderPage(t *testing.T) {
 	})
 }
 
+func TestRenderPage_MaxDimension(t *testing.T) {
+	// Even a content-heavy page should not exceed 1568px on either axis
+	path := filepath.Join(t.TempDir(), "dense.pdf")
+	// Create a PDF with text spanning most of the page
+	createTestPDFDense(t, path)
+
+	pngBytes, err := RenderPage(path, 1)
+	require.NoError(t, err)
+
+	img, err := png.Decode(bytes.NewReader(pngBytes))
+	require.NoError(t, err)
+
+	bounds := img.Bounds()
+	assert.LessOrEqual(t, bounds.Dx(), 1568, "width must not exceed 1568px")
+	assert.LessOrEqual(t, bounds.Dy(), 1568, "height must not exceed 1568px")
+}
+
 func TestCropWhitespace(t *testing.T) {
 	t.Run("crops to content bounding box with padding", func(t *testing.T) {
 		// 100x100 white image with a 10x10 black block at (40,40)-(50,50)

@@ -42,6 +42,22 @@ func createTestPDFWithMetadata(t *testing.T, path string) {
 	require.NoError(t, doc.OutputFileAndClose(path))
 }
 
+// createTestPDFDense creates a PDF filled with text from edge to edge,
+// so content spans nearly the full page dimensions.
+func createTestPDFDense(t *testing.T, path string) {
+	t.Helper()
+	doc := fpdf.New("P", "mm", "Letter", "")
+	doc.SetMargins(0, 0, 0)
+	doc.AddPage()
+	doc.SetFont("Helvetica", "", 10)
+	// Fill vertically from top to bottom (Letter = 279.4mm)
+	for y := 5.0; y <= 275.0; y += 4.0 {
+		// Fill horizontally too (Letter = 215.9mm)
+		doc.Text(5, y, "XXXX Dense content that fills the entire page width and height from edge to edge XXXX")
+	}
+	require.NoError(t, doc.OutputFileAndClose(path))
+}
+
 // createTestPDFSeparateWords creates a PDF with each word as a separate text element,
 // simulating how real PDFs typically encode text.
 func createTestPDFSeparateWords(t *testing.T, path string) {
