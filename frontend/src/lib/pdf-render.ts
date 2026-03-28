@@ -79,11 +79,18 @@ export async function renderPage(
 	canvas.height = Math.floor(viewport.height * dpr);
 	canvas.style.width = `${viewport.width}px`;
 	canvas.style.height = `${viewport.height}px`;
+	canvas.style.backgroundColor = 'white';
 
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return;
 
 	ctx.scale(dpr, dpr);
+
+	// Pre-fill with white so the browser knows the background is opaque,
+	// enabling subpixel (LCD) antialiasing instead of grayscale.
+	ctx.fillStyle = '#ffffff';
+	ctx.fillRect(0, 0, viewport.width, viewport.height);
+
 	container.appendChild(canvas);
 
 	await page.render({ canvasContext: ctx, canvas, viewport }).promise;

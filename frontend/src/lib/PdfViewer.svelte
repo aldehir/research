@@ -636,6 +636,11 @@
 		flex-shrink: 0;
 	}
 
+	.page-wrapper :global(canvas) {
+		background-color: white;
+		display: block;
+	}
+
 	.status {
 		color: #ddd;
 		font-size: 1.1rem;

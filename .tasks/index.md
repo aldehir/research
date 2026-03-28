@@ -18,3 +18,5 @@
 - [ ] 14 — Add streaming markdown renderer to chat panel `TODO`
 - [ ] 15 — Implement snapshot_page tool `TODO`
 - [x] 16 — Background PDF text extraction and search index `COMPLETE`
+- [ ] 17 — Save reading position per paper `TODO`
+- [x] 18 — Add subpixel antialiasing to PDF rendering `COMPLETE`

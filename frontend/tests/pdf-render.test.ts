@@ -65,7 +65,9 @@ describe('renderPage', () => {
 		container = document.createElement('div');
 		// jsdom doesn't implement getContext, mock it
 		HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
-			scale: vi.fn()
+			scale: vi.fn(),
+			fillRect: vi.fn(),
+			fillStyle: ''
 		})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 	});
 
@@ -166,6 +168,31 @@ describe('renderPage', () => {
 		const value = container.style.getPropertyValue('--total-scale-factor');
 		expect(parseFloat(value)).toBeCloseTo(96 / 72, 4);
 	});
+
+	it('sets background-color white on canvas for subpixel antialiasing', async () => {
+		await renderPage(fakePage as any, container, 1.0);
+
+		const canvas = container.querySelector('canvas')!;
+		expect(canvas.style.backgroundColor).toBe('white');
+	});
+
+	it('pre-fills canvas with white before rendering', async () => {
+		const fillRectSpy = vi.fn();
+		let capturedFillStyle = '';
+		HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+			scale: vi.fn(),
+			set fillStyle(v: string) { capturedFillStyle = v; },
+			get fillStyle() { return capturedFillStyle; },
+			fillRect: fillRectSpy
+		})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+
+		await renderPage(fakePage as any, container, 1.0);
+
+		expect(capturedFillStyle).toBe('#ffffff');
+		const expectedW = PAGE_WIDTH * PDF_TO_CSS_UNITS;
+		const expectedH = PAGE_HEIGHT * PDF_TO_CSS_UNITS;
+		expect(fillRectSpy).toHaveBeenCalledWith(0, 0, expectedW, expectedH);
+	});
 });
 
 describe('clearPage', () => {
@@ -239,7 +266,9 @@ describe('render/clear dimension stability', () => {
 	beforeEach(() => {
 		container = document.createElement('div');
 		HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
-			scale: vi.fn()
+			scale: vi.fn(),
+			fillRect: vi.fn(),
+			fillStyle: ''
 		})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 	});
 
