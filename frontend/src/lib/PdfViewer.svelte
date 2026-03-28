@@ -28,7 +28,6 @@
 
 	let zoomDisplay = $derived(formatZoom(scale));
 	let jumpPageInput = $state('');
-	let hasSelection = $state(false);
 
 	// Track what we've loaded to avoid duplicate loads
 	let loadedPaperId: string | null = null;
@@ -194,7 +193,6 @@
 		const selection = window.getSelection();
 		if (!selection || selection.isCollapsed || !selection.toString().trim()) {
 			clearSelection();
-			hasSelection = false;
 			return;
 		}
 
@@ -202,7 +200,6 @@
 		const anchorNode = selection.anchorNode;
 		if (!anchorNode) {
 			clearSelection();
-			hasSelection = false;
 			return;
 		}
 
@@ -216,21 +213,18 @@
 
 		if (!pageWrapper) {
 			clearSelection();
-			hasSelection = false;
 			return;
 		}
 
 		const textLayer = pageWrapper.querySelector('.textLayer') as HTMLDivElement | null;
 		if (!textLayer) {
 			clearSelection();
-			hasSelection = false;
 			return;
 		}
 
 		const pageText = extractPageText(textLayer);
 		const surrounding = extractSurroundingContext(selected, pageText);
 		setSelection(selected, surrounding);
-		hasSelection = true;
 	}
 
 	// Single effect: only tracks paperId, nothing else
@@ -270,12 +264,6 @@
 			<button onclick={handleZoomIn} disabled={scale >= 5.0} aria-label="Zoom in">+</button>
 		</div>
 	</div>
-
-	{#if hasSelection}
-		<div class="selection-indicator">
-			Text selected &mdash; use chat to ask about it
-		</div>
-	{/if}
 
 	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onmouseup={handleMouseUp}>
 		{#if loading}
@@ -377,16 +365,6 @@
 		bottom: 0;
 		overflow: hidden;
 		line-height: 1;
-	}
-
-	.selection-indicator {
-		padding: 0.4rem 1rem;
-		background: #e3f2fd;
-		color: #1565c0;
-		font-size: 0.8rem;
-		text-align: center;
-		border-bottom: 1px solid #90caf9;
-		flex-shrink: 0;
 	}
 
 	.status {
