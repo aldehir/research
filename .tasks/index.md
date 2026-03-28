@@ -17,4 +17,4 @@
 - [ ] 13 — Mobile-first slide-over panel layout `TODO`
 - [ ] 14 — Add streaming markdown renderer to chat panel `TODO`
 - [ ] 15 — Implement snapshot_page tool `TODO`
-- [ ] 16 — Background PDF text extraction and search index `TODO`
+- [x] 16 — Background PDF text extraction and search index `COMPLETE`

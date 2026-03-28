@@ -952,6 +952,117 @@ func TestSendMessage_LogsFinalResponseSummary(t *testing.T) {
 	assert.Contains(t, logOutput, "total_duration")
 }
 
+func TestSendMessage_ReadPageUsesIndex(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	storage := pdf.NewStorage(t.TempDir())
+
+	// Create paper WITHOUT a real PDF file — read_page must use the index
+	p := store.Paper{
+		ID:        "paper-1",
+		Title:     "Test Paper",
+		FilePath:  "/nonexistent.pdf",
+		FileSize:  1000,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+	// Pre-index page text
+	require.NoError(t, store.UpsertPageText(tdb.DB, "paper-1", 1, "Indexed page content"))
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	mock := &multiTurnStreamer{
+		calls: [][]anthropic.StreamEvent{
+			{
+				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "read_page", ToolInput: `{"page":1}`},
+				{Type: "message_stop"},
+			},
+			{
+				{Type: "content_block_delta", Text: "Got it"},
+				{Type: "message_stop"},
+			},
+		},
+	}
+
+	mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+	body := `{"content":"Read page 1"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Verify tool result contains indexed content (not pdftotext)
+	require.Len(t, mock.requests, 2)
+	lastMsg := mock.requests[1].Messages[len(mock.requests[1].Messages)-1]
+	require.NotEmpty(t, lastMsg.ContentBlocks)
+	assert.Contains(t, lastMsg.ContentBlocks[0].Content, "Indexed page content")
+}
+
+func TestSendMessage_SearchUsesIndex(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	storage := pdf.NewStorage(t.TempDir())
+
+	// Create paper WITHOUT a real PDF file — search must use the index
+	p := store.Paper{
+		ID:        "paper-1",
+		Title:     "Test Paper",
+		FilePath:  "/nonexistent.pdf",
+		FileSize:  1000,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+	// Pre-index text
+	require.NoError(t, store.UpsertPageText(tdb.DB, "paper-1", 1, "Introduction to neural networks"))
+	require.NoError(t, store.UpsertPageText(tdb.DB, "paper-1", 2, "Training deep neural models"))
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	mock := &multiTurnStreamer{
+		calls: [][]anthropic.StreamEvent{
+			{
+				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "search_pdf", ToolInput: `{"query":"neural"}`},
+				{Type: "message_stop"},
+			},
+			{
+				{Type: "content_block_delta", Text: "Found neural on pages 1 and 2"},
+				{Type: "message_stop"},
+			},
+		},
+	}
+
+	mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+	body := `{"content":"Search for neural"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Verify tool result contains FTS results
+	require.Len(t, mock.requests, 2)
+	lastMsg := mock.requests[1].Messages[len(mock.requests[1].Messages)-1]
+	require.NotEmpty(t, lastMsg.ContentBlocks)
+	assert.Contains(t, lastMsg.ContentBlocks[0].Content, "neural")
+}
+
 // createTestPDFWithText is a helper that creates a valid PDF with text.
 func createTestPDFWithText(t *testing.T, path string, text string) {
 	t.Helper()

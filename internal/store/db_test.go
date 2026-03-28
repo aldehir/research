@@ -116,6 +116,98 @@ func TestCascadeDelete_SessionDeleteRemovesMessages(t *testing.T) {
 	assertRowCount(t, db, "papers", 1)
 }
 
+func TestOpen_CreatesPaperPagesTable(t *testing.T) {
+	db, err := store.Open(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	// paper_pages table should exist
+	var name string
+	err = db.QueryRow(
+		"SELECT name FROM sqlite_master WHERE type='table' AND name='paper_pages'",
+	).Scan(&name)
+	assert.NoError(t, err)
+	assert.Equal(t, "paper_pages", name)
+}
+
+func TestOpen_CreatesPaperPagesFTSTable(t *testing.T) {
+	db, err := store.Open(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	// paper_pages_fts virtual table should exist
+	var name string
+	err = db.QueryRow(
+		"SELECT name FROM sqlite_master WHERE type='table' AND name='paper_pages_fts'",
+	).Scan(&name)
+	assert.NoError(t, err)
+	assert.Equal(t, "paper_pages_fts", name)
+}
+
+func TestOpen_PapersHasTextIndexedAtColumn(t *testing.T) {
+	db, err := store.Open(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	// text_indexed_at column should exist on papers
+	_, err = db.Exec("SELECT text_indexed_at FROM papers LIMIT 0")
+	assert.NoError(t, err)
+}
+
+func TestCascadeDelete_PaperDeleteRemovesPages(t *testing.T) {
+	db, err := store.Open(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Exec(
+		"INSERT INTO papers (id, title, file_path, file_size, created_at) VALUES (?, ?, ?, ?, ?)",
+		"paper-1", "Test Paper", "/path/to/file.pdf", 1024, "2026-01-01T00:00:00Z",
+	)
+	require.NoError(t, err)
+
+	_, err = db.Exec(
+		"INSERT INTO paper_pages (id, paper_id, page_num, text_content) VALUES (?, ?, ?, ?)",
+		"page-1", "paper-1", 1, "Hello world",
+	)
+	require.NoError(t, err)
+
+	// Delete the paper
+	_, err = db.Exec("DELETE FROM papers WHERE id = ?", "paper-1")
+	require.NoError(t, err)
+
+	// paper_pages should be gone
+	assertRowCount(t, db, "paper_pages", 0)
+}
+
+func TestCascadeDelete_PaperDeleteCleansFTS(t *testing.T) {
+	db, err := store.Open(":memory:")
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Exec(
+		"INSERT INTO papers (id, title, file_path, file_size, created_at) VALUES (?, ?, ?, ?, ?)",
+		"paper-1", "Test Paper", "/path/to/file.pdf", 1024, "2026-01-01T00:00:00Z",
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, store.UpsertPageText(db, "paper-1", 1, "quantum computing is great"))
+
+	// Verify FTS has data
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM paper_pages_fts WHERE paper_pages_fts MATCH 'quantum'").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	// Delete the paper
+	_, err = db.Exec("DELETE FROM papers WHERE id = ?", "paper-1")
+	require.NoError(t, err)
+
+	// FTS should be empty
+	err = db.QueryRow("SELECT COUNT(*) FROM paper_pages_fts WHERE paper_pages_fts MATCH 'quantum'").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
 func assertRowCount(t *testing.T, db *sql.DB, table string, expected int) {
 	t.Helper()
 	var count int

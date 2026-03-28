@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aldehir/research/internal/anthropic"
 	"github.com/aldehir/research/internal/api"
@@ -58,6 +59,11 @@ func main() {
 		logger.Warn("ANTHROPIC_API_KEY not set, chat features will be unavailable")
 	}
 	storage := pdf.NewStorage(pdfDir)
+
+	// Start background PDF text indexer
+	indexer := pdf.NewIndexer(db)
+	go runIndexer(indexer, storage, logger)
+
 	mux := api.NewMux(db, storage, chat, logger)
 
 	serveFrontend(mux, logger)
@@ -66,6 +72,21 @@ func main() {
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		logger.Error("server error", "error", err)
 		os.Exit(1)
+	}
+}
+
+func runIndexer(indexer *pdf.Indexer, storage *pdf.Storage, logger *slog.Logger) {
+	// Run once immediately on startup
+	if err := indexer.IndexUnindexed(storage.Path); err != nil {
+		logger.Warn("indexer run failed", "error", err)
+	}
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		if err := indexer.IndexUnindexed(storage.Path); err != nil {
+			logger.Warn("indexer run failed", "error", err)
+		}
 	}
 }
 

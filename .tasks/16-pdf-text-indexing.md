@@ -21,16 +21,16 @@ Design decisions:
 
 ## Checklist
 
-- [ ] Add `paper_pages` table migration: `(id, paper_id, page_num, text_content, UNIQUE(paper_id, page_num))`
-- [ ] Add FTS5 virtual table: `paper_pages_fts` using content from `paper_pages`
-- [ ] Add store functions: `UpsertPageText`, `GetPageText`, `SearchPageText` (FTS5 BM25 query)
-- [ ] Test store functions with FTS5 search ranking and page-scoped reads
-- [ ] Add `internal/pdf/indexer.go` — `Indexer` struct that extracts all pages for a paper via `pdftotext` and writes to `paper_pages`
-- [ ] Test indexer: extracts pages, writes to DB, skips already-indexed papers
-- [ ] Add background worker in `cmd/server/main.go` — polls for unindexed papers on a ticker, runs indexer
-- [ ] Wire `executeToolCall` to read from `paper_pages` for `read_page` (fall back to pdftotext)
-- [ ] Wire `executeToolCall` to use FTS5 search for `search_pdf` (fall back to pdftotext)
-- [ ] Add `paper_pages` cleanup on paper deletion (CASCADE or explicit)
+- [x] Add `paper_pages` table migration: `(id, paper_id, page_num, text_content, UNIQUE(paper_id, page_num))`
+- [x] Add FTS5 virtual table: `paper_pages_fts` using content from `paper_pages`
+- [x] Add store functions: `UpsertPageText`, `GetPageText`, `SearchPageText` (FTS5 BM25 query)
+- [x] Test store functions with FTS5 search ranking and page-scoped reads
+- [x] Add `internal/pdf/indexer.go` — `Indexer` struct that extracts all pages for a paper via `pdftotext` and writes to `paper_pages`
+- [x] Test indexer: extracts pages, writes to DB, skips already-indexed papers
+- [x] Add background worker in `cmd/server/main.go` — polls for unindexed papers on a ticker, runs indexer
+- [x] Wire `executeToolCall` to read from `paper_pages` for `read_page` (fall back to pdftotext)
+- [x] Wire `executeToolCall` to use FTS5 search for `search_pdf` (fall back to pdftotext)
+- [x] Add `paper_pages` cleanup on paper deletion (CASCADE or explicit)
 
 ## Notes
 

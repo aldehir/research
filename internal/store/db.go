@@ -78,4 +78,28 @@ var migrations = []string{
 	`ALTER TABLE papers ADD COLUMN subject TEXT`,
 	`ALTER TABLE papers ADD COLUMN published_date TEXT`,
 	`ALTER TABLE papers ADD COLUMN page_count INTEGER`,
+	`ALTER TABLE papers ADD COLUMN text_indexed_at TEXT`,
+	`CREATE TABLE IF NOT EXISTS paper_pages (
+		id TEXT PRIMARY KEY,
+		paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+		page_num INTEGER NOT NULL,
+		text_content TEXT NOT NULL,
+		UNIQUE(paper_id, page_num)
+	)`,
+	`CREATE VIRTUAL TABLE IF NOT EXISTS paper_pages_fts USING fts5(
+		text_content,
+		content=paper_pages,
+		content_rowid=rowid
+	)`,
+	// Triggers to keep FTS5 index in sync with paper_pages
+	`CREATE TRIGGER IF NOT EXISTS paper_pages_ai AFTER INSERT ON paper_pages BEGIN
+		INSERT INTO paper_pages_fts(rowid, text_content) VALUES (new.rowid, new.text_content);
+	END`,
+	`CREATE TRIGGER IF NOT EXISTS paper_pages_ad AFTER DELETE ON paper_pages BEGIN
+		INSERT INTO paper_pages_fts(paper_pages_fts, rowid, text_content) VALUES ('delete', old.rowid, old.text_content);
+	END`,
+	`CREATE TRIGGER IF NOT EXISTS paper_pages_au AFTER UPDATE ON paper_pages BEGIN
+		INSERT INTO paper_pages_fts(paper_pages_fts, rowid, text_content) VALUES ('delete', old.rowid, old.text_content);
+		INSERT INTO paper_pages_fts(rowid, text_content) VALUES (new.rowid, new.text_content);
+	END`,
 }

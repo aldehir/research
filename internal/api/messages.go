@@ -219,10 +219,11 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			})
 
 			// Execute tools and build tool_result blocks
+			tctx := toolContext{db: db, paperID: paperID, pdfPath: pdfPath}
 			var resultBlocks []anthropic.ContentBlock
 			for _, tc := range toolCalls {
 				toolStart := time.Now()
-				result := executeToolCall(tc.ToolName, tc.ToolInput, pdfPath, logger)
+				result := executeToolCall(tc.ToolName, tc.ToolInput, tctx, logger)
 				logger.Info("tool_result",
 					"name", tc.ToolName,
 					"result_length", len(result),
@@ -298,7 +299,7 @@ func truncatePreview(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-func executeToolCall(name, input, pdfPath string, logger *slog.Logger) string {
+func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) string {
 	switch name {
 	case "search_pdf":
 		var args struct {
@@ -307,7 +308,18 @@ func executeToolCall(name, input, pdfPath string, logger *slog.Logger) string {
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
 			return fmt.Sprintf("Error parsing arguments: %v", err)
 		}
-		results, err := pdf.SearchText(pdfPath, args.Query)
+
+		// Try FTS5 index first
+		if tc.db != nil && tc.paperID != "" {
+			results, err := store.SearchPageText(tc.db, tc.paperID, args.Query)
+			if err == nil && len(results) > 0 {
+				b, _ := json.Marshal(results)
+				return string(b)
+			}
+		}
+
+		// Fall back to pdftotext
+		results, err := pdf.SearchText(tc.pdfPath, args.Query)
 		if err != nil {
 			logger.Warn("search_pdf failed", "error", err)
 			return fmt.Sprintf("Error searching PDF: %v", err)
@@ -325,7 +337,17 @@ func executeToolCall(name, input, pdfPath string, logger *slog.Logger) string {
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
 			return fmt.Sprintf("Error parsing arguments: %v", err)
 		}
-		text, err := pdf.ExtractPageText(pdfPath, args.Page)
+
+		// Try indexed text first
+		if tc.db != nil && tc.paperID != "" {
+			text, err := store.GetPageText(tc.db, tc.paperID, args.Page)
+			if err == nil {
+				return text
+			}
+		}
+
+		// Fall back to pdftotext
+		text, err := pdf.ExtractPageText(tc.pdfPath, args.Page)
 		if err != nil {
 			logger.Warn("read_page failed", "error", err)
 			return fmt.Sprintf("Error reading page: %v", err)
@@ -345,6 +367,13 @@ func executeToolCall(name, input, pdfPath string, logger *slog.Logger) string {
 	default:
 		return fmt.Sprintf("Unknown tool: %s", name)
 	}
+}
+
+// toolContext holds context needed for tool execution.
+type toolContext struct {
+	db      *sql.DB
+	paperID string
+	pdfPath string
 }
 
 func appendViewerContext(content string, currentPage int, selectedText string) string {
