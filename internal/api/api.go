@@ -18,6 +18,7 @@ func NewMux(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logger *slog.Lo
 	mux.Handle("GET /api/papers/{id}", wrap(handleGetPaper(db, logger)))
 	mux.Handle("GET /api/papers/{id}/pdf", wrap(handleServePDF(db, storage, logger)))
 	mux.Handle("DELETE /api/papers/{id}", wrap(handleDeletePaper(db, storage, logger)))
+	mux.Handle("PATCH /api/papers/{id}/position", wrap(handleUpdateReadingPosition(db, logger)))
 	mux.Handle("GET /api/papers/{id}/chats", wrap(handleListChatSessions(db, logger)))
 	mux.Handle("POST /api/papers/{id}/chats", wrap(handleCreateChatSession(db, logger)))
 	mux.Handle("GET /api/papers/{id}/chats/{chatId}", wrap(handleGetChatSession(db, logger)))

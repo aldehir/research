@@ -150,6 +150,89 @@ func TestUpdatePaperMetadata(t *testing.T) {
 	assert.Nil(t, got.PublishedDate)
 }
 
+func TestUpdateReadingPosition(t *testing.T) {
+	db := testDB(t)
+
+	paper := Paper{
+		ID:        "pos-1",
+		Title:     "Position Test",
+		FilePath:  "/papers/pos.pdf",
+		FileSize:  1000,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, CreatePaper(db, paper))
+
+	t.Run("sets last_read_page", func(t *testing.T) {
+		err := UpdateReadingPosition(db, "pos-1", 42)
+		require.NoError(t, err)
+
+		got, err := GetPaper(db, "pos-1")
+		require.NoError(t, err)
+		require.NotNil(t, got.LastReadPage)
+		assert.Equal(t, 42, *got.LastReadPage)
+	})
+
+	t.Run("overwrites previous value", func(t *testing.T) {
+		err := UpdateReadingPosition(db, "pos-1", 99)
+		require.NoError(t, err)
+
+		got, err := GetPaper(db, "pos-1")
+		require.NoError(t, err)
+		require.NotNil(t, got.LastReadPage)
+		assert.Equal(t, 99, *got.LastReadPage)
+	})
+
+	t.Run("returns ErrNotFound for nonexistent paper", func(t *testing.T) {
+		err := UpdateReadingPosition(db, "nonexistent", 1)
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
+}
+
+func TestGetPaper_ReturnsLastReadPage(t *testing.T) {
+	db := testDB(t)
+
+	paper := Paper{
+		ID:        "read-1",
+		Title:     "Read Test",
+		FilePath:  "/papers/read.pdf",
+		FileSize:  2000,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, CreatePaper(db, paper))
+
+	// Initially nil
+	got, err := GetPaper(db, "read-1")
+	require.NoError(t, err)
+	assert.Nil(t, got.LastReadPage)
+
+	// After update
+	require.NoError(t, UpdateReadingPosition(db, "read-1", 5))
+	got, err = GetPaper(db, "read-1")
+	require.NoError(t, err)
+	require.NotNil(t, got.LastReadPage)
+	assert.Equal(t, 5, *got.LastReadPage)
+}
+
+func TestListPapers_ReturnsLastReadPage(t *testing.T) {
+	db := testDB(t)
+
+	paper := Paper{
+		ID:        "list-pos-1",
+		Title:     "List Pos Test",
+		FilePath:  "/papers/lpos.pdf",
+		FileSize:  500,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, CreatePaper(db, paper))
+	require.NoError(t, UpdateReadingPosition(db, "list-pos-1", 7))
+
+	papers, err := ListPapers(db)
+	require.NoError(t, err)
+	require.Len(t, papers, 1)
+	require.NotNil(t, papers[0].LastReadPage)
+	assert.Equal(t, 7, *papers[0].LastReadPage)
+}
+
 func TestCreateAndGetPaper_MetadataDefaulsToNil(t *testing.T) {
 	db := testDB(t)
 

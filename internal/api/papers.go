@@ -191,6 +191,37 @@ func handleDeletePaper(db *sql.DB, storage *pdf.Storage, logger *slog.Logger) ht
 	}
 }
 
+func handleUpdateReadingPosition(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+
+		var body struct {
+			Page int `json:"page"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body", logger)
+			return
+		}
+		if body.Page < 1 {
+			writeError(w, http.StatusBadRequest, "page must be >= 1", logger)
+			return
+		}
+
+		err := store.UpdateReadingPosition(db, id, body.Page)
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "paper not found", logger)
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update reading position", logger)
+			return
+		}
+
+		logger.Info("reading position updated", "paper_id", id, "page", body.Page)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

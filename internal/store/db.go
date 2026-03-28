@@ -91,6 +91,7 @@ var migrations = []string{
 		content=paper_pages,
 		content_rowid=rowid
 	)`,
+	`ALTER TABLE papers ADD COLUMN last_read_page INTEGER`,
 	// Triggers to keep FTS5 index in sync with paper_pages
 	`CREATE TRIGGER IF NOT EXISTS paper_pages_ai AFTER INSERT ON paper_pages BEGIN
 		INSERT INTO paper_pages_fts(rowid, text_content) VALUES (new.rowid, new.text_content);

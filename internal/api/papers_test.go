@@ -231,6 +231,93 @@ func TestServePDF(t *testing.T) {
 	})
 }
 
+func TestUpdateReadingPosition(t *testing.T) {
+	t.Run("valid update returns 204", func(t *testing.T) {
+		mux, tdb, _ := testMux(t)
+
+		p := store.Paper{ID: "p1", Title: "A Paper", FilePath: "/a.pdf", FileSize: 100, CreatedAt: "2026-03-28T00:00:00Z"}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		body := `{"page": 5}`
+		req := httptest.NewRequest(http.MethodPatch, "/api/papers/p1/position", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Verify the position was persisted
+		got, err := store.GetPaper(tdb.DB, "p1")
+		require.NoError(t, err)
+		require.NotNil(t, got.LastReadPage)
+		assert.Equal(t, 5, *got.LastReadPage)
+	})
+
+	t.Run("non-existent paper returns 404", func(t *testing.T) {
+		mux, _, _ := testMux(t)
+
+		body := `{"page": 1}`
+		req := httptest.NewRequest(http.MethodPatch, "/api/papers/missing/position", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+
+	t.Run("page < 1 returns 400", func(t *testing.T) {
+		mux, tdb, _ := testMux(t)
+
+		p := store.Paper{ID: "p2", Title: "B Paper", FilePath: "/b.pdf", FileSize: 100, CreatedAt: "2026-03-28T00:00:00Z"}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		body := `{"page": 0}`
+		req := httptest.NewRequest(http.MethodPatch, "/api/papers/p2/position", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("invalid JSON returns 400", func(t *testing.T) {
+		mux, _, _ := testMux(t)
+
+		req := httptest.NewRequest(http.MethodPatch, "/api/papers/p1/position", bytes.NewBufferString("not json"))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("position visible in get paper response", func(t *testing.T) {
+		mux, tdb, _ := testMux(t)
+
+		p := store.Paper{ID: "p3", Title: "C Paper", FilePath: "/c.pdf", FileSize: 100, CreatedAt: "2026-03-28T00:00:00Z"}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		// Set position
+		body := `{"page": 10}`
+		req := httptest.NewRequest(http.MethodPatch, "/api/papers/p3/position", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusNoContent, rec.Code)
+
+		// Get paper and verify last_read_page in JSON response
+		req = httptest.NewRequest(http.MethodGet, "/api/papers/p3", nil)
+		rec = httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var got map[string]any
+		err := json.NewDecoder(rec.Body).Decode(&got)
+		require.NoError(t, err)
+		assert.Equal(t, float64(10), got["last_read_page"])
+	})
+}
+
 func generateMinimalPDF(t *testing.T) []byte {
 	t.Helper()
 	doc := gopdf.New("P", "mm", "Letter", "")

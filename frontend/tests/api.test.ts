@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listPapers, uploadPaper, getPaper, deletePaper, getPdfUrl } from '$lib/api';
+import { listPapers, uploadPaper, getPaper, deletePaper, getPdfUrl, updateReadingPosition } from '$lib/api';
 
 const mockPaper = {
 	id: '123e4567-e89b-12d3-a456-426614174000',
@@ -112,6 +112,31 @@ describe('deletePaper', () => {
 		}));
 
 		await expect(deletePaper(mockPaper.id)).rejects.toThrow('forbidden');
+	});
+});
+
+describe('updateReadingPosition', () => {
+	it('sends PATCH request with page number', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true
+		}));
+
+		await updateReadingPosition(mockPaper.id, 5);
+
+		expect(fetch).toHaveBeenCalledWith(`/api/papers/${mockPaper.id}/position`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ page: 5 })
+		});
+	});
+
+	it('throws on error response', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: false,
+			json: () => Promise.resolve({ error: 'not found' })
+		}));
+
+		await expect(updateReadingPosition('nonexistent', 1)).rejects.toThrow('not found');
 	});
 });
 

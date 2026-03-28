@@ -18,6 +18,7 @@ type Paper struct {
 	Subject       *string `json:"subject,omitempty"`
 	PublishedDate *string `json:"published_date,omitempty"`
 	PageCount     *int    `json:"page_count,omitempty"`
+	LastReadPage  *int    `json:"last_read_page,omitempty"`
 	CreatedAt     string  `json:"created_at"`
 }
 
@@ -33,7 +34,7 @@ func CreatePaper(db *sql.DB, p Paper) error {
 
 // ListPapers returns all papers ordered by created_at descending.
 func ListPapers(db *sql.DB) ([]Paper, error) {
-	rows, err := db.Query(`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, created_at FROM papers ORDER BY created_at DESC`)
+	rows, err := db.Query(`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, last_read_page, created_at FROM papers ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +43,7 @@ func ListPapers(db *sql.DB) ([]Paper, error) {
 	var papers []Paper
 	for rows.Next() {
 		var p Paper
-		if err := rows.Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.LastReadPage, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		papers = append(papers, p)
@@ -54,8 +55,8 @@ func ListPapers(db *sql.DB) ([]Paper, error) {
 func GetPaper(db *sql.DB, id string) (Paper, error) {
 	var p Paper
 	err := db.QueryRow(
-		`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, created_at FROM papers WHERE id = ?`, id,
-	).Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.CreatedAt)
+		`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, last_read_page, created_at FROM papers WHERE id = ?`, id,
+	).Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.LastReadPage, &p.CreatedAt)
 	return p, err
 }
 
@@ -74,6 +75,23 @@ func UpdatePaperMetadata(db *sql.DB, id string, m PaperMetadata) error {
 		m.Author, m.Subject, m.PublishedDate, m.PageCount, id,
 	)
 	return err
+}
+
+// UpdateReadingPosition sets the last_read_page for a paper.
+// Returns ErrNotFound if the paper does not exist.
+func UpdateReadingPosition(db *sql.DB, id string, page int) error {
+	result, err := db.Exec(`UPDATE papers SET last_read_page = ? WHERE id = ?`, page, id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // DeletePaper deletes a paper by ID. Returns ErrNotFound if the paper does not exist.

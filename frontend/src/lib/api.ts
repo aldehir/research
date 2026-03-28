@@ -3,6 +3,7 @@ export interface Paper {
 	title: string;
 	file_path: string;
 	file_size: number;
+	last_read_page?: number;
 	created_at: string;
 }
 
@@ -37,6 +38,18 @@ export async function getPaper(id: string): Promise<Paper> {
 export async function deletePaper(id: string): Promise<void> {
 	const response = await fetch(`/api/papers/${id}`, {
 		method: 'DELETE'
+	});
+	if (!response.ok) {
+		const body = await response.json() as { error: string };
+		throw new Error(body.error);
+	}
+}
+
+export async function updateReadingPosition(id: string, page: number): Promise<void> {
+	const response = await fetch(`/api/papers/${id}/position`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ page })
 	});
 	if (!response.ok) {
 		const body = await response.json() as { error: string };

@@ -2,7 +2,8 @@
 	import 'pdfjs-dist/web/pdf_viewer.css';
 	import * as pdfjsLib from 'pdfjs-dist';
 	import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
-	import { getPdfUrl } from '$lib/api';
+	import { getPdfUrl, updateReadingPosition } from '$lib/api';
+	import { papersStore } from '$lib/papers.svelte';
 	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale } from '$lib/pdf-utils';
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
@@ -72,6 +73,34 @@
 	// Track what we've loaded to avoid duplicate loads
 	let loadedPaperId: string | null = null;
 	let currentLoadId = 0;
+	let pendingInitialPage: number | null = null;
+
+	let saveTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastSavedPage: number | null = null;
+
+	function savePosition(page: number): void {
+		if (page === lastSavedPage) return;
+		lastSavedPage = page;
+		updateReadingPosition(paperId, page).catch(() => {
+			// Best effort -- ignore errors
+		});
+	}
+
+	function debouncedSavePosition(page: number): void {
+		if (saveTimer !== null) clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => {
+			savePosition(page);
+			saveTimer = null;
+		}, 2000);
+	}
+
+	function flushSavePosition(): void {
+		if (saveTimer !== null) {
+			clearTimeout(saveTimer);
+			saveTimer = null;
+			savePosition(currentPage);
+		}
+	}
 
 	function computeFitScale(): number | null {
 		if (!scrollContainer || pages.length === 0) return null;
@@ -145,6 +174,10 @@
 	async function loadPdf(id: string): Promise<void> {
 		if (id === loadedPaperId && pdfDoc) return;
 
+		// Flush any pending save from the previous paper before switching
+		flushSavePosition();
+		lastSavedPage = null;
+
 		const thisLoad = ++currentLoadId;
 		loadedPaperId = id;
 		loading = true;
@@ -189,8 +222,15 @@
 			pdfDoc = doc;
 			pages = allPages;
 			totalPages = doc.numPages;
-			currentPage = 1;
 			isFitToWidth = true;
+
+			// Restore saved reading position or default to page 1
+			const savedPage = papersStore.selectedPaper?.last_read_page;
+			const initialPage = savedPage && savedPage >= 1 && savedPage <= doc.numPages
+				? savedPage : 1;
+			currentPage = initialPage;
+			lastSavedPage = initialPage;
+			pendingInitialPage = initialPage > 1 ? initialPage : null;
 
 			// Extract table of contents
 			tocEntries = await extractOutline(doc);
@@ -279,6 +319,15 @@
 		// When all page elements are registered, start observing
 		if (pdfDoc && pageElements.size === totalPages) {
 			setupObserver();
+			// Scroll to saved reading position after initial render
+			if (pendingInitialPage !== null) {
+				const target = pendingInitialPage;
+				pendingInitialPage = null;
+				const targetEl = pageElements.get(target);
+				if (targetEl && scrollContainer) {
+					targetEl.scrollIntoView({ block: 'start' });
+				}
+			}
 		}
 
 		return {
@@ -427,6 +476,24 @@
 	$effect(() => {
 		document.addEventListener('selectionchange', handleSelectionChange);
 		return () => document.removeEventListener('selectionchange', handleSelectionChange);
+	});
+
+	// Debounced save of reading position when currentPage changes
+	$effect(() => {
+		const page = currentPage;
+		if (totalPages > 0) {
+			debouncedSavePosition(page);
+		}
+	});
+
+	// Flush pending save on tab close / navigation
+	$effect(() => {
+		const handleBeforeUnload = () => flushSavePosition();
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => {
+			flushSavePosition();
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+		};
 	});
 
 	$effect(() => {
