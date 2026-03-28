@@ -5,6 +5,7 @@
 	import { getPdfUrl } from '$lib/api';
 	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale } from '$lib/pdf-utils';
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
+	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -179,9 +180,28 @@
 		}
 	}
 
+	function collectPageOffsets(): { pageNum: number; top: number; height: number }[] {
+		if (!scrollContainer) return [];
+		const offsets: { pageNum: number; top: number; height: number }[] = [];
+		for (const [pageNum, el] of pageElements) {
+			offsets.push({
+				pageNum,
+				top: el.offsetTop,
+				height: el.offsetHeight
+			});
+		}
+		offsets.sort((a, b) => a.pageNum - b.pageNum);
+		return offsets;
+	}
+
 	async function rerenderVisible(): Promise<void> {
 		const gen = ++renderGeneration;
 		renderedPages = new Set();
+
+		// Capture scroll anchor before resizing
+		const anchor = scrollContainer
+			? computeScrollAnchor(scrollContainer.scrollTop, collectPageOffsets())
+			: null;
 
 		// Resize all placeholders to new scale, clear rendered content
 		for (const [pageNum, el] of pageElements) {
@@ -191,6 +211,12 @@
 			el.innerHTML = '';
 			el.style.width = `${dims.width}px`;
 			el.style.height = `${dims.height}px`;
+		}
+
+		// Restore scroll position from anchor
+		if (anchor && scrollContainer) {
+			const newOffsets = collectPageOffsets();
+			scrollContainer.scrollTop = restoreScrollTop(anchor, newOffsets);
 		}
 
 		if (renderGeneration !== gen) return;
@@ -488,6 +514,7 @@
 	.pages-container {
 		flex: 1;
 		overflow: auto;
+		overflow-anchor: none;
 		background: #888;
 		display: flex;
 		flex-direction: column;

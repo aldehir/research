@@ -202,6 +202,58 @@ describe('getPageDimensions', () => {
 	});
 });
 
+describe('render/clear dimension stability', () => {
+	let container: HTMLDivElement;
+
+	const fakePage = {
+		getViewport: ({ scale }: { scale: number }) => ({
+			width: PAGE_WIDTH * scale,
+			height: PAGE_HEIGHT * scale
+		}),
+		getTextContent: async () => ({ items: [], styles: {} }),
+		render: () => ({ promise: Promise.resolve() })
+	};
+
+	beforeEach(() => {
+		container = document.createElement('div');
+		HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+			scale: vi.fn()
+		})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+	});
+
+	const scales = [0.5, 1.0, 1.5, 2.0];
+
+	for (const s of scales) {
+		it(`dimensions are identical before render, after render, and after clear at scale ${s}`, async () => {
+			// Set placeholder dimensions (as PdfViewer does)
+			const dims = getPageDimensions(fakePage as any, s);
+			container.style.width = `${dims.width}px`;
+			container.style.height = `${dims.height}px`;
+
+			const beforeWidth = container.style.width;
+			const beforeHeight = container.style.height;
+
+			// Render page (sets dimensions from viewport)
+			await renderPage(fakePage as any, container, s);
+			const afterRenderWidth = container.style.width;
+			const afterRenderHeight = container.style.height;
+
+			// Clear and restore placeholder
+			clearPage(container);
+			const restoredDims = getPageDimensions(fakePage as any, s);
+			container.style.width = `${restoredDims.width}px`;
+			container.style.height = `${restoredDims.height}px`;
+			const afterClearWidth = container.style.width;
+			const afterClearHeight = container.style.height;
+
+			expect(afterRenderWidth).toBe(beforeWidth);
+			expect(afterRenderHeight).toBe(beforeHeight);
+			expect(afterClearWidth).toBe(beforeWidth);
+			expect(afterClearHeight).toBe(beforeHeight);
+		});
+	}
+});
+
 describe('renderAnnotations', () => {
 	let container: HTMLDivElement;
 	const fakePage = {
