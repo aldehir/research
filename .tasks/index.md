@@ -22,7 +22,7 @@
 - [ ] 03 — Papers CRUD API `IN PROGRESS`
 - [x] 04 — PDF Upload & Storage `COMPLETE`
 - [x] 05 — PDF Serving `COMPLETE`
-- [ ] 06 — Frontend: Paper Library `TODO`
+- [x] 06 — Frontend: Paper Library `COMPLETE`
 - [ ] 07 — Frontend: PDF Viewer `TODO`
 - [ ] 08 — Text Selection & Context `TODO`
 - [ ] 09 — Chat Sessions API `TODO`
