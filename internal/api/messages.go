@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -226,20 +227,34 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 				result := executeToolCall(tc.ToolName, tc.ToolInput, tctx, logger)
 				logger.Info("tool_result",
 					"name", tc.ToolName,
-					"result_length", len(result),
+					"content_type", result.contentType,
+					"result_length", len(result.text),
 					"duration", time.Since(toolStart),
 				)
-				resultBlocks = append(resultBlocks, anthropic.ContentBlock{
+
+				block := anthropic.ContentBlock{
 					Type:      "tool_result",
 					ToolUseID: tc.ToolUseID,
-					Content:   result,
-				})
-				sendSSE(sseToolResult{
-					Type:    "tool_result",
-					Name:    tc.ToolName,
-					Text:    result,
-					Preview: truncatePreview(result, toolResultPreviewLen),
-				})
+				}
+				sse := sseToolResult{
+					Type: "tool_result",
+					Name: tc.ToolName,
+				}
+
+				if result.contentType == "image" {
+					block.ContentParts = result.contentParts
+					sse.ContentType = "image"
+					sse.ImageData = result.imageData
+					sse.Text = fmt.Sprintf("Rendered page %s as image", tc.ToolInput)
+					sse.Preview = "Page snapshot rendered"
+				} else {
+					block.Content = result.text
+					sse.Text = result.text
+					sse.Preview = truncatePreview(result.text, toolResultPreviewLen)
+				}
+
+				resultBlocks = append(resultBlocks, block)
+				sendSSE(sse)
 			}
 
 			// Append user message with tool_result blocks
@@ -284,10 +299,12 @@ type sseToolCall struct {
 }
 
 type sseToolResult struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Text    string `json:"text"`
-	Preview string `json:"preview"`
+	Type        string `json:"type"`
+	Name        string `json:"name"`
+	Text        string `json:"text"`
+	Preview     string `json:"preview"`
+	ContentType string `json:"content_type,omitempty"`
+	ImageData   string `json:"image_data,omitempty"`
 }
 
 const toolResultPreviewLen = 200
@@ -299,14 +316,27 @@ func truncatePreview(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) string {
+// toolExecResult holds the result of a tool execution.
+// For most tools, text is populated. For snapshot_page, contentParts carries image data.
+type toolExecResult struct {
+	text         string
+	contentType  string // "text" or "image"
+	contentParts []anthropic.ContentPart
+	imageData    string // base64-encoded image for SSE
+}
+
+func textResult(s string) toolExecResult {
+	return toolExecResult{text: s, contentType: "text"}
+}
+
+func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) toolExecResult {
 	switch name {
 	case "search_pdf":
 		var args struct {
 			Query string `json:"query"`
 		}
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
-			return fmt.Sprintf("Error parsing arguments: %v", err)
+			return textResult(fmt.Sprintf("Error parsing arguments: %v", err))
 		}
 
 		// Try FTS5 index first
@@ -314,7 +344,7 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) st
 			results, err := store.SearchPageText(tc.db, tc.paperID, args.Query)
 			if err == nil && len(results) > 0 {
 				b, _ := json.Marshal(results)
-				return string(b)
+				return textResult(string(b))
 			}
 		}
 
@@ -322,27 +352,27 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) st
 		results, err := pdf.SearchText(tc.pdfPath, args.Query)
 		if err != nil {
 			logger.Warn("search_pdf failed", "error", err)
-			return fmt.Sprintf("Error searching PDF: %v", err)
+			return textResult(fmt.Sprintf("Error searching PDF: %v", err))
 		}
 		if len(results) == 0 {
-			return "No matches found."
+			return textResult("No matches found.")
 		}
 		b, _ := json.Marshal(results)
-		return string(b)
+		return textResult(string(b))
 
 	case "read_page":
 		var args struct {
 			Page int `json:"page"`
 		}
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
-			return fmt.Sprintf("Error parsing arguments: %v", err)
+			return textResult(fmt.Sprintf("Error parsing arguments: %v", err))
 		}
 
 		// Try indexed text first
 		if tc.db != nil && tc.paperID != "" {
 			text, err := store.GetPageText(tc.db, tc.paperID, args.Page)
 			if err == nil {
-				return text
+				return textResult(text)
 			}
 		}
 
@@ -350,9 +380,9 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) st
 		text, err := pdf.ExtractPageText(tc.pdfPath, args.Page)
 		if err != nil {
 			logger.Warn("read_page failed", "error", err)
-			return fmt.Sprintf("Error reading page: %v", err)
+			return textResult(fmt.Sprintf("Error reading page: %v", err))
 		}
-		return text
+		return textResult(text)
 
 	case "go_to_page":
 		// Client-side tool — return success, the SSE event was already sent
@@ -360,12 +390,43 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) st
 			Page int `json:"page"`
 		}
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
-			return fmt.Sprintf("Error parsing arguments: %v", err)
+			return textResult(fmt.Sprintf("Error parsing arguments: %v", err))
 		}
-		return fmt.Sprintf("Navigated to page %d.", args.Page)
+		return textResult(fmt.Sprintf("Navigated to page %d.", args.Page))
+
+	case "snapshot_page":
+		var args struct {
+			Page int `json:"page"`
+		}
+		if err := json.Unmarshal([]byte(input), &args); err != nil {
+			return textResult(fmt.Sprintf("Error parsing arguments: %v", err))
+		}
+
+		pngBytes, err := pdf.RenderPage(tc.pdfPath, args.Page)
+		if err != nil {
+			logger.Warn("snapshot_page failed", "error", err, "page", args.Page)
+			return textResult(fmt.Sprintf("Error rendering page: %v", err))
+		}
+
+		b64 := base64.StdEncoding.EncodeToString(pngBytes)
+		return toolExecResult{
+			text:        fmt.Sprintf("Rendered page %d as image (%d bytes)", args.Page, len(pngBytes)),
+			contentType: "image",
+			imageData:   b64,
+			contentParts: []anthropic.ContentPart{
+				{
+					Type: "image",
+					Source: &anthropic.ImageSource{
+						Type:      "base64",
+						MediaType: "image/png",
+						Data:      b64,
+					},
+				},
+			},
+		}
 
 	default:
-		return fmt.Sprintf("Unknown tool: %s", name)
+		return textResult(fmt.Sprintf("Unknown tool: %s", name))
 	}
 }
 

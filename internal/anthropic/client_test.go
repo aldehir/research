@@ -295,6 +295,121 @@ func TestStream_ToolResultMessages(t *testing.T) {
 	assert.Equal(t, "toolu_abc", resultBlock["tool_use_id"])
 }
 
+func TestContentBlock_ImageToolResultMarshaling(t *testing.T) {
+	// Verify that tool_result blocks with image content serialize as
+	// structured content arrays, not plain strings.
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		json.Unmarshal(bodyBytes, &receivedBody)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n")
+		flusher.Flush()
+		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key")
+	c.BaseURL = server.URL
+
+	ch, err := c.Stream(context.Background(), Request{
+		Messages: []Message{
+			{Role: "user", Content: "show me the chart"},
+			{Role: "assistant", ContentBlocks: []ContentBlock{
+				{Type: "tool_use", ID: "toolu_img", Name: "snapshot_page", Input: json.RawMessage(`{"page":1}`)},
+			}},
+			{Role: "user", ContentBlocks: []ContentBlock{
+				{Type: "tool_result", ToolUseID: "toolu_img", ContentParts: []ContentPart{
+					{Type: "image", Source: &ImageSource{
+						Type:      "base64",
+						MediaType: "image/png",
+						Data:      "iVBORw0KGgo=",
+					}},
+				}},
+			}},
+		},
+	})
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	msgs := receivedBody["messages"].([]any)
+	require.Len(t, msgs, 3)
+
+	// Tool result message should have structured content array
+	userMsg := msgs[2].(map[string]any)
+	resultBlocks := userMsg["content"].([]any)
+	resultBlock := resultBlocks[0].(map[string]any)
+	assert.Equal(t, "tool_result", resultBlock["type"])
+	assert.Equal(t, "toolu_img", resultBlock["tool_use_id"])
+
+	// The content field should be an array with an image block
+	contentArr, ok := resultBlock["content"].([]any)
+	require.True(t, ok, "content should be an array for image tool results")
+	require.Len(t, contentArr, 1)
+
+	imgBlock := contentArr[0].(map[string]any)
+	assert.Equal(t, "image", imgBlock["type"])
+	source := imgBlock["source"].(map[string]any)
+	assert.Equal(t, "base64", source["type"])
+	assert.Equal(t, "image/png", source["media_type"])
+	assert.Equal(t, "iVBORw0KGgo=", source["data"])
+}
+
+func TestContentBlock_TextToolResultMarshaling(t *testing.T) {
+	// Existing text tool_result blocks should continue to serialize as strings
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		json.Unmarshal(bodyBytes, &receivedBody)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n")
+		flusher.Flush()
+		fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key")
+	c.BaseURL = server.URL
+
+	ch, err := c.Stream(context.Background(), Request{
+		Messages: []Message{
+			{Role: "user", Content: "read page 1"},
+			{Role: "assistant", ContentBlocks: []ContentBlock{
+				{Type: "tool_use", ID: "toolu_txt", Name: "read_page", Input: json.RawMessage(`{"page":1}`)},
+			}},
+			{Role: "user", ContentBlocks: []ContentBlock{
+				{Type: "tool_result", ToolUseID: "toolu_txt", Content: "Page text here"},
+			}},
+		},
+	})
+	require.NoError(t, err)
+	for range ch {
+	}
+
+	msgs := receivedBody["messages"].([]any)
+	require.Len(t, msgs, 3)
+
+	userMsg := msgs[2].(map[string]any)
+	resultBlocks := userMsg["content"].([]any)
+	resultBlock := resultBlocks[0].(map[string]any)
+	assert.Equal(t, "tool_result", resultBlock["type"])
+	// The content field should be a string for text results
+	content, ok := resultBlock["content"].(string)
+	require.True(t, ok, "content should be a string for text tool results")
+	assert.Equal(t, "Page text here", content)
+}
+
 func TestPDFTools_HasExpectedTools(t *testing.T) {
 	tools := PDFTools()
 	names := make([]string, len(tools))
@@ -304,6 +419,7 @@ func TestPDFTools_HasExpectedTools(t *testing.T) {
 	assert.Contains(t, names, "search_pdf")
 	assert.Contains(t, names, "read_page")
 	assert.Contains(t, names, "go_to_page")
+	assert.Contains(t, names, "snapshot_page")
 }
 
 func TestStream_ContextCancellation(t *testing.T) {

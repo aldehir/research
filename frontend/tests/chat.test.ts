@@ -302,6 +302,34 @@ describe('sendMessage', () => {
 		expect(onDone).toHaveBeenCalledOnce();
 	});
 
+	it('parses image tool_result with content_type and image_data', async () => {
+		const stream = makeSSEStream([
+			'data: {"type":"tool_call","name":"snapshot_page","args":{"page":1}}',
+			'data: {"type":"tool_result","name":"snapshot_page","text":"Rendered page 1","preview":"Page snapshot rendered","content_type":"image","image_data":"iVBORw0KGgo="}',
+			'data: {"type":"delta","text":"I can see the chart"}',
+			'data: {"type":"done"}'
+		]);
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			body: stream
+		}));
+
+		const results: Array<{ name: string; text: string; preview: string; content_type?: string; image_data?: string }> = [];
+		const onDone = vi.fn();
+
+		await sendMessage(paperId, chatId, 'Show me the chart',
+			vi.fn(), onDone, vi.fn(), undefined,
+			vi.fn(),
+			(result) => results.push(result));
+
+		expect(results).toHaveLength(1);
+		expect(results[0].name).toBe('snapshot_page');
+		expect(results[0].content_type).toBe('image');
+		expect(results[0].image_data).toBe('iVBORw0KGgo=');
+		expect(onDone).toHaveBeenCalledOnce();
+	});
+
 	it('handles chunked SSE data across multiple reads', async () => {
 		const encoder = new TextEncoder();
 		const stream = new ReadableStream<Uint8Array>({

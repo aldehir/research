@@ -952,6 +952,154 @@ func TestSendMessage_LogsFinalResponseSummary(t *testing.T) {
 	assert.Contains(t, logOutput, "total_duration")
 }
 
+func TestSendMessage_SnapshotPage(t *testing.T) {
+	t.Run("executes snapshot_page tool and returns image content", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		// Create a real PDF so pdftoppm can render it
+		pdfPath := storage.Path("paper-1")
+		createTestPDFWithText(t, pdfPath, "Chart data here")
+
+		pageCount := 1
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  pdfPath,
+			FileSize:  1000,
+			PageCount: &pageCount,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_snap", ToolName: "snapshot_page", ToolInput: `{"page":1}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "I can see the chart"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"Show me the chart"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		events := parseSSEEvents(t, rec.Body.String())
+
+		// Should have tool_call and tool_result events
+		var hasToolCall, hasToolResult, hasDone bool
+		for _, ev := range events {
+			switch ev.Type {
+			case "tool_call":
+				hasToolCall = true
+				assert.Equal(t, "snapshot_page", ev.Name)
+			case "tool_result":
+				hasToolResult = true
+				assert.Equal(t, "snapshot_page", ev.Name)
+			case "done":
+				hasDone = true
+			}
+		}
+		assert.True(t, hasToolCall, "should emit tool_call event")
+		assert.True(t, hasToolResult, "should emit tool_result event")
+		assert.True(t, hasDone, "should emit done event")
+
+		// Verify the tool result sent to Anthropic has image content parts
+		require.Len(t, mock.requests, 2)
+		secondReq := mock.requests[1]
+		lastMsg := secondReq.Messages[len(secondReq.Messages)-1]
+		require.NotEmpty(t, lastMsg.ContentBlocks)
+		toolResult := lastMsg.ContentBlocks[0]
+		assert.Equal(t, "tool_result", toolResult.Type)
+		require.NotEmpty(t, toolResult.ContentParts, "snapshot_page should return image content parts")
+		assert.Equal(t, "image", toolResult.ContentParts[0].Type)
+		require.NotNil(t, toolResult.ContentParts[0].Source)
+		assert.Equal(t, "image/png", toolResult.ContentParts[0].Source.MediaType)
+		assert.NotEmpty(t, toolResult.ContentParts[0].Source.Data)
+	})
+
+	t.Run("snapshot_page SSE result includes content_type image", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		pdfPath := storage.Path("paper-1")
+		createTestPDFWithText(t, pdfPath, "Visual content")
+
+		pageCount := 1
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  pdfPath,
+			FileSize:  1000,
+			PageCount: &pageCount,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_snap2", ToolName: "snapshot_page", ToolInput: `{"page":1}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "Done"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"Show me page 1"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Parse raw SSE to check content_type field
+		events := parseSSEEvents(t, rec.Body.String())
+		var toolResult *sseEvent
+		for i := range events {
+			if events[i].Type == "tool_result" {
+				toolResult = &events[i]
+				break
+			}
+		}
+		require.NotNil(t, toolResult)
+		assert.Equal(t, "snapshot_page", toolResult.Name)
+	})
+}
+
 func TestSendMessage_ReadPageUsesIndex(t *testing.T) {
 	tdb := store.NewTestDB(t)
 	storage := pdf.NewStorage(t.TempDir())

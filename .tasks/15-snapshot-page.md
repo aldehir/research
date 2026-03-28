@@ -28,16 +28,16 @@ PDF rendering: No pure-Go PDF rasterizer exists. Use `pdftoppm` (poppler-utils) 
 
 ## Checklist
 
-- [ ] Add `RenderPage(path string, pageNum int) ([]byte, error)` in `internal/pdf/render.go` — shells out to `pdftoppm` to render a single page to PNG
-- [ ] Test `RenderPage` with a test PDF (verify PNG output, error on invalid page)
-- [ ] Refactor `ContentBlock.Content` to support both string and structured image content for `tool_result` blocks — update JSON marshaling
-- [ ] Test that image content blocks serialize correctly for the Anthropic API
-- [ ] Add `snapshot_page` tool schema to `PDFTools()` in `tools.go`
-- [ ] Add `snapshot_page` case to `executeToolCall` — call `RenderPage`, base64-encode, return image content block
-- [ ] Update SSE `tool_result` event to carry content type info (text vs image)
-- [ ] Update frontend `ToolResult` type and SSE parsing to handle image results
-- [ ] Update frontend tool result display to render images (e.g. `<img>` tag for image results)
-- [ ] Update `tool-display.ts` with label/arg formatting for `snapshot_page`
+- [x] Add `RenderPage(path string, pageNum int) ([]byte, error)` in `internal/pdf/render.go` — shells out to `pdftoppm` to render a single page to PNG
+- [x] Test `RenderPage` with a test PDF (verify PNG output, error on invalid page)
+- [x] Refactor `ContentBlock.Content` to support both string and structured image content for `tool_result` blocks — update JSON marshaling
+- [x] Test that image content blocks serialize correctly for the Anthropic API
+- [x] Add `snapshot_page` tool schema to `PDFTools()` in `tools.go`
+- [x] Add `snapshot_page` case to `executeToolCall` — call `RenderPage`, base64-encode, return image content block
+- [x] Update SSE `tool_result` event to carry content type info (text vs image)
+- [x] Update frontend `ToolResult` type and SSE parsing to handle image results
+- [x] Update frontend tool result display to render images (e.g. `<img>` tag for image results)
+- [x] Update `tool-display.ts` with label/arg formatting for `snapshot_page`
 
 ## Notes
 

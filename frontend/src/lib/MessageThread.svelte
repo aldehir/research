@@ -50,7 +50,11 @@
 		</button>
 		{#if expandedTools.has(key) && segment.result}
 			<div class="tool-result-popout">
-				<pre class="tool-result-content">{segment.result.text}</pre>
+				{#if segment.result.content_type === 'image' && segment.result.image_data}
+					<img class="tool-result-image" src="data:image/png;base64,{segment.result.image_data}" alt="Page snapshot" />
+				{:else}
+					<pre class="tool-result-content">{segment.result.text}</pre>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -220,5 +224,11 @@
 		white-space: pre-wrap;
 		word-break: break-word;
 		color: #333;
+	}
+
+	.tool-result-image {
+		max-width: 100%;
+		height: auto;
+		border-radius: 4px;
 	}
 </style>

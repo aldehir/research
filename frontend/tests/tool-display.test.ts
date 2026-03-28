@@ -14,6 +14,10 @@ describe('formatToolLabel', () => {
 		expect(formatToolLabel('go_to_page')).toBe('Navigated to page');
 	});
 
+	it('returns label for snapshot_page', () => {
+		expect(formatToolLabel('snapshot_page')).toBe('Page snapshot');
+	});
+
 	it('returns generic label for unknown tools', () => {
 		expect(formatToolLabel('unknown_tool')).toBe('Used tool');
 	});
@@ -30,6 +34,10 @@ describe('formatToolArgs', () => {
 
 	it('formats go_to_page page number', () => {
 		expect(formatToolArgs('go_to_page', { page: 3 })).toBe('page 3');
+	});
+
+	it('formats snapshot_page page number', () => {
+		expect(formatToolArgs('snapshot_page', { page: 2 })).toBe('page 2');
 	});
 
 	it('falls back to JSON for unknown tools', () => {

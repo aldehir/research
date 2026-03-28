@@ -116,6 +116,8 @@ export interface ToolResult {
 	name: string;
 	text: string;
 	preview: string;
+	content_type?: string;
+	image_data?: string;
 }
 
 export async function sendMessage(
@@ -174,13 +176,13 @@ export async function sendMessage(
 			for (const line of lines) {
 				if (!line.startsWith('data: ')) continue;
 				const json = line.slice(6);
-				const event = JSON.parse(json) as { type: string; text?: string; name?: string; args?: Record<string, unknown>; preview?: string };
+				const event = JSON.parse(json) as { type: string; text?: string; name?: string; args?: Record<string, unknown>; preview?: string; content_type?: string; image_data?: string };
 				if (event.type === 'delta' && event.text) {
 					onDelta(event.text);
 				} else if (event.type === 'tool_call' && onToolCall && event.name) {
 					onToolCall({ name: event.name, args: event.args ?? {} });
 				} else if (event.type === 'tool_result' && onToolResult && event.name) {
-					onToolResult({ name: event.name, text: event.text ?? '', preview: event.preview ?? '' });
+					onToolResult({ name: event.name, text: event.text ?? '', preview: event.preview ?? '', content_type: event.content_type, image_data: event.image_data });
 				} else if (event.type === 'done') {
 					onDone();
 					return;

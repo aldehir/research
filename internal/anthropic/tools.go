@@ -54,5 +54,19 @@ func PDFTools() []Tool {
 				"required": ["page"]
 			}`),
 		},
+		{
+			Name:        "snapshot_page",
+			Description: "Render a PDF page as an image for visual inspection. Use this to see charts, figures, diagrams, tables, or any visual content that text extraction might miss.",
+			InputSchema: json.RawMessage(`{
+				"type": "object",
+				"properties": {
+					"page": {
+						"type": "integer",
+						"description": "The 1-based page number to render as an image"
+					}
+				},
+				"required": ["page"]
+			}`),
+		},
 	}
 }

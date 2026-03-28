@@ -21,15 +21,64 @@ type Client struct {
 	Logger     *slog.Logger
 }
 
+// ImageSource holds the base64-encoded data for an image content part.
+type ImageSource struct {
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // e.g. "image/png"
+	Data      string `json:"data"`       // base64-encoded image data
+}
+
+// ContentPart is a structured part within a tool_result content array.
+type ContentPart struct {
+	Type   string       `json:"type"`             // "text" or "image"
+	Text   string       `json:"text,omitempty"`   // for type "text"
+	Source *ImageSource `json:"source,omitempty"` // for type "image"
+}
+
 // ContentBlock represents a structured content block in a message.
+// For tool_result blocks, use Content for plain text results or
+// ContentParts for structured results (e.g. images).
 type ContentBlock struct {
-	Type      string          `json:"type"`
-	Text      string          `json:"text,omitempty"`
-	ID        string          `json:"id,omitempty"`
-	Name      string          `json:"name,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	ToolUseID string          `json:"tool_use_id,omitempty"`
-	Content   string          `json:"content,omitempty"`
+	Type         string          `json:"-"`
+	Text         string          `json:"-"`
+	ID           string          `json:"-"`
+	Name         string          `json:"-"`
+	Input        json.RawMessage `json:"-"`
+	ToolUseID    string          `json:"-"`
+	Content      string          `json:"-"`
+	ContentParts []ContentPart   `json:"-"`
+}
+
+// MarshalJSON serializes a ContentBlock.
+// For tool_result blocks with ContentParts, the content field is an array.
+func (cb ContentBlock) MarshalJSON() ([]byte, error) {
+	if cb.Type == "tool_result" && len(cb.ContentParts) > 0 {
+		return json.Marshal(struct {
+			Type      string        `json:"type"`
+			ToolUseID string        `json:"tool_use_id,omitempty"`
+			Content   []ContentPart `json:"content"`
+		}{cb.Type, cb.ToolUseID, cb.ContentParts})
+	}
+
+	// Default: use struct tags for all other block types
+	type plain struct {
+		Type      string          `json:"type"`
+		Text      string          `json:"text,omitempty"`
+		ID        string          `json:"id,omitempty"`
+		Name      string          `json:"name,omitempty"`
+		Input     json.RawMessage `json:"input,omitempty"`
+		ToolUseID string          `json:"tool_use_id,omitempty"`
+		Content   string          `json:"content,omitempty"`
+	}
+	return json.Marshal(plain{
+		Type:      cb.Type,
+		Text:      cb.Text,
+		ID:        cb.ID,
+		Name:      cb.Name,
+		Input:     cb.Input,
+		ToolUseID: cb.ToolUseID,
+		Content:   cb.Content,
+	})
 }
 
 // Message represents a chat message. Use Content for simple text messages
