@@ -3,13 +3,12 @@
 	import * as pdfjsLib from 'pdfjs-dist';
 	import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 	import { TextLayer } from 'pdfjs-dist';
-	import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 	import { getPdfUrl } from '$lib/api';
 	import { clampPage, zoomIn, zoomOut, formatZoom, DEFAULT_SCALE } from '$lib/pdf-utils';
 	import { extractPageText, extractSurroundingContext } from '$lib/text-context';
 	import { setSelection, clearSelection, getSelectedText } from '$lib/selection.svelte';
 
-	pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 	interface Props {
 		paperId: string;
@@ -20,7 +19,7 @@
 	let currentPage = $state(1);
 	let totalPages = $state(0);
 	let scale = $state(DEFAULT_SCALE);
-	let pdfDoc = $state<PDFDocumentProxy | null>(null);
+	let pdfDoc: PDFDocumentProxy | null = $state.raw(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let scrollContainer: HTMLDivElement | undefined = $state();
@@ -31,7 +30,16 @@
 	let jumpPageInput = $state('');
 	let hasSelection = $state(false);
 
+	// Track what we've loaded to avoid duplicate loads
+	let loadedPaperId: string | null = null;
+	let currentLoadId = 0;
+
 	async function loadPdf(id: string): Promise<void> {
+		// Guard: don't reload the same paper
+		if (id === loadedPaperId && pdfDoc) return;
+
+		const thisLoad = ++currentLoadId;
+		loadedPaperId = id;
 		loading = true;
 		error = null;
 		pageElements = new Map();
@@ -44,14 +52,26 @@
 
 		try {
 			const url = getPdfUrl(id);
+			console.log('[PdfViewer] loading', url);
 			const doc = await pdfjsLib.getDocument(url).promise;
+
+			// Stale check: another load started while we were waiting
+			if (thisLoad !== currentLoadId) {
+				doc.destroy();
+				return;
+			}
+
+			console.log('[PdfViewer] loaded, pages:', doc.numPages);
 			pdfDoc = doc;
 			totalPages = doc.numPages;
 			currentPage = 1;
 		} catch (e) {
+			if (thisLoad !== currentLoadId) return;
 			error = e instanceof Error ? e.message : 'Failed to load PDF';
 		} finally {
-			loading = false;
+			if (thisLoad === currentLoadId) {
+				loading = false;
+			}
 		}
 	}
 
@@ -109,6 +129,12 @@
 
 	function pageAction(node: HTMLDivElement, pageNum: number) {
 		pageElements.set(pageNum, node);
+
+		// When the last page element is registered, trigger render
+		if (pdfDoc && pageElements.size === totalPages) {
+			renderAllPages(pdfDoc, scale);
+		}
+
 		return {
 			destroy() {
 				pageElements.delete(pageNum);
@@ -156,10 +182,12 @@
 
 	function handleZoomIn(): void {
 		scale = zoomIn(scale);
+		if (pdfDoc) renderAllPages(pdfDoc, scale);
 	}
 
 	function handleZoomOut(): void {
 		scale = zoomOut(scale);
+		if (pdfDoc) renderAllPages(pdfDoc, scale);
 	}
 
 	function handleMouseUp(): void {
@@ -205,16 +233,11 @@
 		hasSelection = true;
 	}
 
+	// Single effect: only tracks paperId, nothing else
 	$effect(() => {
-		loadPdf(paperId);
-	});
-
-	$effect(() => {
-		const doc = pdfDoc;
-		const s = scale;
-		if (doc && pageElements.size > 0) {
-			renderAllPages(doc, s);
-		}
+		const id = paperId;
+		console.log('[PdfViewer] effect fired, paperId:', id);
+		loadPdf(id);
 	});
 </script>
 
