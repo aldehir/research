@@ -6,6 +6,7 @@ import {
 	sendMessage
 } from '$lib/api';
 import type { ChatSession, Message } from '$lib/api';
+import { generateId } from '$lib/uuid';
 
 let sessions = $state<ChatSession[]>([]);
 let activeSessionId = $state<string | null>(null);
@@ -51,7 +52,7 @@ export async function sendChatMessage(
 	surroundingText?: string
 ): Promise<void> {
 	const userMessage: Message = {
-		id: crypto.randomUUID(),
+		id: generateId(),
 		chat_session_id: chatId,
 		role: 'user',
 		content,
@@ -74,7 +75,7 @@ export async function sendChatMessage(
 		},
 		() => {
 			const assistantMessage: Message = {
-				id: crypto.randomUUID(),
+				id: generateId(),
 				chat_session_id: chatId,
 				role: 'assistant',
 				content: streamingContent,
