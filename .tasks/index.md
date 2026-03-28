@@ -29,4 +29,4 @@
 - [x] 10 — Anthropic Client `COMPLETE`
 - [x] 11 — Messages Endpoint + SSE `COMPLETE`
 - [x] 12 — Frontend: Chat Panel `COMPLETE`
-- [ ] 13 — Layout & Integration `TODO`
+- [x] 13 — Layout & Integration `COMPLETE`
