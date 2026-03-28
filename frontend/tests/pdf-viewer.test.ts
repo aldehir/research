@@ -3,8 +3,10 @@ import {
 	clampScale,
 	zoomIn,
 	zoomOut,
+	zoomByDelta,
 	clampPage,
 	formatZoom,
+	fitToWidthScale,
 	DEFAULT_SCALE,
 	ZOOM_STEP,
 	MIN_SCALE,
@@ -100,5 +102,64 @@ describe('formatZoom', () => {
 	it('rounds to nearest integer', () => {
 		expect(formatZoom(1.333)).toBe('133%');
 		expect(formatZoom(0.666)).toBe('67%');
+	});
+});
+
+describe('fitToWidthScale', () => {
+	it('computes scale to fit page width into container', () => {
+		// page is 612px wide at scale=1, container is 800px with 16px padding
+		const scale = fitToWidthScale(800, 612, 16);
+		// (800 - 16) / 612 = 1.2810...
+		expect(scale).toBeCloseTo(1.28, 2);
+	});
+
+	it('scales down when container is narrower than page', () => {
+		const scale = fitToWidthScale(400, 612, 16);
+		// (400 - 16) / 612 = 0.6274...
+		expect(scale).toBeCloseTo(0.63, 2);
+	});
+
+	it('clamps to MIN_SCALE', () => {
+		const scale = fitToWidthScale(50, 612, 16);
+		expect(scale).toBe(MIN_SCALE);
+	});
+
+	it('clamps to MAX_SCALE', () => {
+		const scale = fitToWidthScale(50000, 612, 16);
+		expect(scale).toBe(MAX_SCALE);
+	});
+
+	it('uses zero padding by default', () => {
+		const scale = fitToWidthScale(612, 612);
+		expect(scale).toBe(1.0);
+	});
+});
+
+describe('zoomByDelta', () => {
+	it('zooms in with positive delta', () => {
+		// deltaY -100 (scroll up) → zoom in
+		const result = zoomByDelta(1.0, -100);
+		expect(result).toBeGreaterThan(1.0);
+	});
+
+	it('zooms out with negative delta', () => {
+		// deltaY 100 (scroll down) → zoom out
+		const result = zoomByDelta(1.0, 100);
+		expect(result).toBeLessThan(1.0);
+	});
+
+	it('scales proportionally to current zoom', () => {
+		// Same delta at higher scale produces larger absolute change
+		const changeAt1 = zoomByDelta(1.0, -100) - 1.0;
+		const changeAt2 = zoomByDelta(2.0, -100) - 2.0;
+		expect(changeAt2).toBeGreaterThan(changeAt1);
+	});
+
+	it('clamps to MIN_SCALE', () => {
+		expect(zoomByDelta(MIN_SCALE, 10000)).toBe(MIN_SCALE);
+	});
+
+	it('clamps to MAX_SCALE', () => {
+		expect(zoomByDelta(MAX_SCALE, -10000)).toBe(MAX_SCALE);
 	});
 });

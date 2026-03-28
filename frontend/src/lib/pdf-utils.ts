@@ -27,3 +27,16 @@ export function clampPage(page: number, totalPages: number): number {
 export function formatZoom(scale: number): string {
 	return `${Math.round(scale * 100)}%`;
 }
+
+export function zoomByDelta(scale: number, deltaY: number): number {
+	const factor = 1 - deltaY * 0.002;
+	return clampScale(scale * factor);
+}
+
+export function fitToWidthScale(
+	containerWidth: number,
+	pageWidth: number,
+	padding: number = 0
+): number {
+	return clampScale((containerWidth - padding) / pageWidth);
+}

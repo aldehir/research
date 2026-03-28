@@ -1,10 +1,10 @@
 <script lang="ts">
 	import 'pdfjs-dist/web/pdf_viewer.css';
 	import * as pdfjsLib from 'pdfjs-dist';
-	import type { PDFDocumentProxy } from 'pdfjs-dist';
+	import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 	import { getPdfUrl } from '$lib/api';
-	import { clampPage, zoomIn, zoomOut, formatZoom, DEFAULT_SCALE } from '$lib/pdf-utils';
-	import { renderPage } from '$lib/pdf-render';
+	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale } from '$lib/pdf-utils';
+	import { renderPage, renderAnnotations, clearPage, getPageDimensions } from '$lib/pdf-render';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -14,15 +14,48 @@
 
 	let { paperId }: Props = $props();
 
+	const CONTAINER_PADDING = 16; // 8px padding on each side of .pages-container
+
+	// Minimal link service for AnnotationLayer — handles internal go-to-page
+	// destinations and external URLs opening in a new tab.
+	const linkService = {
+		getDestinationHash: () => '#',
+		getAnchorUrl: () => '#',
+		addLinkAttributes(link: HTMLAnchorElement, url: string) {
+			link.href = url;
+			link.target = '_blank';
+			link.rel = 'noopener noreferrer';
+		},
+		goToDestination: async (dest: string | unknown[]) => {
+			if (!pdfDoc) return;
+			const resolved = typeof dest === 'string'
+				? await pdfDoc.getDestination(dest)
+				: dest;
+			if (!resolved) return;
+			const ref = resolved[0];
+			const pageIndex = await pdfDoc.getPageIndex(ref);
+			goToPage(pageIndex + 1);
+		},
+		goToPage: (pageNum: number) => goToPage(pageNum),
+		navigateTo: () => {},
+		executeNamedAction: () => {},
+		executeSetOCGState: () => {}
+	};
+
 	let currentPage = $state(1);
 	let totalPages = $state(0);
-	let scale = $state(DEFAULT_SCALE);
+	let scale = $state(1.0);
 	let pdfDoc: PDFDocumentProxy | null = $state.raw(null);
+	let pages: PDFPageProxy[] = $state.raw([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let scrollContainer: HTMLDivElement | undefined = $state();
 	let pageElements = new Map<number, HTMLDivElement>();
+	let renderedPages = new Set<number>();
+	let observer: IntersectionObserver | null = null;
 	let renderGeneration = 0;
+	let resizeObserver: ResizeObserver | null = null;
+	let isFitToWidth = $state(true);
 
 	let zoomDisplay = $derived(formatZoom(scale));
 	let jumpPageInput = $state('');
@@ -31,8 +64,62 @@
 	let loadedPaperId: string | null = null;
 	let currentLoadId = 0;
 
+	function computeFitScale(): number | null {
+		if (!scrollContainer || pages.length === 0) return null;
+		const pageWidth = pages[0].getViewport({ scale: 1.0 }).width;
+		return fitToWidthScale(scrollContainer.clientWidth, pageWidth, CONTAINER_PADDING);
+	}
+
+	function handleFitToWidth(): void {
+		const fit = computeFitScale();
+		if (fit !== null) {
+			scale = fit;
+			isFitToWidth = true;
+			rerenderVisible();
+		}
+	}
+
+	function setupObserver(): void {
+		observer?.disconnect();
+		observer = new IntersectionObserver(handleIntersection, {
+			root: scrollContainer,
+			rootMargin: '200% 0px'
+		});
+		for (const [, el] of pageElements) {
+			observer.observe(el);
+		}
+	}
+
+	function handleIntersection(entries: IntersectionObserverEntry[]): void {
+		for (const entry of entries) {
+			const pageNum = Number(entry.target.getAttribute('data-page'));
+			if (!pageNum || !pdfDoc) continue;
+
+			if (entry.isIntersecting && !renderedPages.has(pageNum)) {
+				const page = pages[pageNum - 1];
+				if (page) {
+					renderedPages.add(pageNum);
+					const el = entry.target as HTMLDivElement;
+					renderPage(page, el, scale).then(() =>
+						renderAnnotations(page, el, scale, linkService)
+					);
+				}
+			} else if (!entry.isIntersecting && renderedPages.has(pageNum)) {
+				renderedPages.delete(pageNum);
+				clearPage(entry.target as HTMLDivElement);
+				// Restore placeholder dimensions after clearing
+				const page = pages[pageNum - 1];
+				if (page) {
+					const dims = getPageDimensions(page, scale);
+					const el = entry.target as HTMLDivElement;
+					el.style.width = `${dims.width}px`;
+					el.style.height = `${dims.height}px`;
+				}
+			}
+		}
+	}
+
 	async function loadPdf(id: string): Promise<void> {
-		// Guard: don't reload the same paper
 		if (id === loadedPaperId && pdfDoc) return;
 
 		const thisLoad = ++currentLoadId;
@@ -40,28 +127,48 @@
 		loading = true;
 		error = null;
 		pageElements = new Map();
+		renderedPages = new Set();
 		renderGeneration++;
+		observer?.disconnect();
+		observer = null;
 
 		if (pdfDoc) {
 			pdfDoc.destroy();
 			pdfDoc = null;
+			pages = [];
 		}
 
 		try {
 			const url = getPdfUrl(id);
-			console.log('[PdfViewer] loading', url);
 			const doc = await pdfjsLib.getDocument(url).promise;
 
-			// Stale check: another load started while we were waiting
 			if (thisLoad !== currentLoadId) {
 				doc.destroy();
 				return;
 			}
 
-			console.log('[PdfViewer] loaded, pages:', doc.numPages);
+			// Pre-fetch all page objects (lightweight — no rendering yet)
+			const allPages: PDFPageProxy[] = [];
+			for (let i = 1; i <= doc.numPages; i++) {
+				allPages.push(await doc.getPage(i));
+			}
+
+			if (thisLoad !== currentLoadId) {
+				doc.destroy();
+				return;
+			}
+
 			pdfDoc = doc;
+			pages = allPages;
 			totalPages = doc.numPages;
 			currentPage = 1;
+			isFitToWidth = true;
+
+			// Compute initial fit-to-width scale
+			if (scrollContainer && allPages.length > 0) {
+				const pageWidth = allPages[0].getViewport({ scale: 1.0 }).width;
+				scale = fitToWidthScale(scrollContainer.clientWidth, pageWidth, CONTAINER_PADDING);
+			}
 		} catch (e) {
 			if (thisLoad !== currentLoadId) return;
 			error = e instanceof Error ? e.message : 'Failed to load PDF';
@@ -72,29 +179,47 @@
 		}
 	}
 
-	async function renderAllPages(doc: PDFDocumentProxy, currentScale: number): Promise<void> {
+	async function rerenderVisible(): Promise<void> {
 		const gen = ++renderGeneration;
-		for (let i = 1; i <= doc.numPages; i++) {
-			if (renderGeneration !== gen) return;
-			const container = pageElements.get(i);
-			if (!container) continue;
-			const page = await doc.getPage(i);
-			if (renderGeneration !== gen) return;
-			await renderPage(page, container, currentScale);
+		renderedPages = new Set();
+
+		// Resize all placeholders to new scale, clear rendered content
+		for (const [pageNum, el] of pageElements) {
+			const page = pages[pageNum - 1];
+			if (!page) continue;
+			const dims = getPageDimensions(page, scale);
+			el.innerHTML = '';
+			el.style.width = `${dims.width}px`;
+			el.style.height = `${dims.height}px`;
 		}
+
+		if (renderGeneration !== gen) return;
+
+		// Re-setup observer to trigger rendering of now-visible pages
+		setupObserver();
 	}
 
 	function pageAction(node: HTMLDivElement, pageNum: number) {
 		pageElements.set(pageNum, node);
+		node.setAttribute('data-page', String(pageNum));
 
-		// When the last page element is registered, trigger render
+		// Set initial placeholder dimensions
+		const page = pages[pageNum - 1];
+		if (page) {
+			const dims = getPageDimensions(page, scale);
+			node.style.width = `${dims.width}px`;
+			node.style.height = `${dims.height}px`;
+		}
+
+		// When all page elements are registered, start observing
 		if (pdfDoc && pageElements.size === totalPages) {
-			renderAllPages(pdfDoc, scale);
+			setupObserver();
 		}
 
 		return {
 			destroy() {
 				pageElements.delete(pageNum);
+				renderedPages.delete(pageNum);
 			}
 		};
 	}
@@ -139,23 +264,109 @@
 
 	function handleZoomIn(): void {
 		scale = zoomIn(scale);
-		if (pdfDoc) renderAllPages(pdfDoc, scale);
+		isFitToWidth = false;
+		rerenderVisible();
 	}
 
 	function handleZoomOut(): void {
 		scale = zoomOut(scale);
-		if (pdfDoc) renderAllPages(pdfDoc, scale);
+		isFitToWidth = false;
+		rerenderVisible();
 	}
 
-	// Single effect: only tracks paperId, nothing else
+	function handleWheel(e: WheelEvent): void {
+		if (!e.ctrlKey && !e.metaKey) return;
+		e.preventDefault();
+		const newScale = zoomByDelta(scale, e.deltaY);
+		if (newScale !== scale) {
+			scale = newScale;
+			isFitToWidth = false;
+			rerenderVisible();
+		}
+	}
+
+	function handleKeydown(e: KeyboardEvent): void {
+		// Skip when focus is in an input
+		if ((e.target as HTMLElement).tagName === 'INPUT') return;
+
+		switch (e.key) {
+			case 'PageDown':
+				e.preventDefault();
+				goToPage(currentPage + 1);
+				break;
+			case 'PageUp':
+				e.preventDefault();
+				goToPage(currentPage - 1);
+				break;
+			case 'Home':
+				e.preventDefault();
+				goToPage(1);
+				break;
+			case 'End':
+				e.preventDefault();
+				goToPage(totalPages);
+				break;
+			case '+':
+			case '=':
+				if (e.ctrlKey || e.metaKey) {
+					e.preventDefault();
+					handleZoomIn();
+				}
+				break;
+			case '-':
+				if (e.ctrlKey || e.metaKey) {
+					e.preventDefault();
+					handleZoomOut();
+				}
+				break;
+			case '0':
+				if (e.ctrlKey || e.metaKey) {
+					e.preventDefault();
+					handleFitToWidth();
+				}
+				break;
+		}
+	}
+
 	$effect(() => {
 		const id = paperId;
-		console.log('[PdfViewer] effect fired, paperId:', id);
 		loadPdf(id);
+	});
+
+	// Keyboard navigation
+	$effect(() => {
+		const viewer = scrollContainer?.closest('.pdf-viewer');
+		if (!viewer) return;
+		const el = viewer as HTMLElement;
+		el.addEventListener('keydown', handleKeydown as EventListener);
+		return () => el.removeEventListener('keydown', handleKeydown as EventListener);
+	});
+
+	// Maintain fit-to-width on container resize
+	$effect(() => {
+		const container = scrollContainer;
+		if (!container) return;
+
+		resizeObserver = new ResizeObserver(() => {
+			if (!isFitToWidth || pages.length === 0) return;
+			const fit = computeFitScale();
+			if (fit !== null && Math.abs(fit - scale) > 0.01) {
+				scale = fit;
+				rerenderVisible();
+			}
+		});
+		resizeObserver.observe(container);
+
+		return () => {
+			resizeObserver?.disconnect();
+			resizeObserver = null;
+			observer?.disconnect();
+		};
 	});
 </script>
 
-<div class="pdf-viewer">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="pdf-viewer" tabindex="-1">
 	<div class="toolbar">
 		<div class="toolbar-group">
 			<button
@@ -182,10 +393,17 @@
 			<button onclick={handleZoomOut} disabled={scale <= 0.25} aria-label="Zoom out">&minus;</button>
 			<span class="zoom-info">{zoomDisplay}</span>
 			<button onclick={handleZoomIn} disabled={scale >= 5.0} aria-label="Zoom in">+</button>
+			<button
+				onclick={handleFitToWidth}
+				class:active={isFitToWidth}
+				aria-label="Fit to width"
+				title="Fit to width"
+			>&#x2194;</button>
 		</div>
 	</div>
 
-	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll}>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onwheel={handleWheel}>
 		{#if loading}
 			<p class="status">Loading PDF...</p>
 		{:else if error}
@@ -209,6 +427,7 @@
 		flex-direction: column;
 		height: 100%;
 		width: 100%;
+		outline: none;
 	}
 
 	.toolbar {
@@ -244,6 +463,11 @@
 
 	.toolbar button:hover:not(:disabled) {
 		background: #e8e8e8;
+	}
+
+	.toolbar button.active {
+		background: #dbeafe;
+		border-color: #93b4e8;
 	}
 
 	.page-info, .zoom-info {
