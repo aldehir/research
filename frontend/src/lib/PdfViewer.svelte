@@ -1,12 +1,12 @@
 <script lang="ts">
 	import 'pdfjs-dist/web/pdf_viewer.css';
 	import * as pdfjsLib from 'pdfjs-dist';
-	import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
-	import { TextLayer } from 'pdfjs-dist';
+	import type { PDFDocumentProxy } from 'pdfjs-dist';
 	import { getPdfUrl } from '$lib/api';
 	import { clampPage, zoomIn, zoomOut, formatZoom, DEFAULT_SCALE } from '$lib/pdf-utils';
 	import { extractPageText, extractSurroundingContext } from '$lib/text-context';
 	import { setSelection, clearSelection, getSelectedText } from '$lib/selection.svelte';
+	import { renderPage } from '$lib/pdf-render';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -72,46 +72,6 @@
 				loading = false;
 			}
 		}
-	}
-
-	async function renderPage(
-		page: PDFPageProxy,
-		container: HTMLDivElement,
-		currentScale: number
-	): Promise<void> {
-		const viewport = page.getViewport({ scale: currentScale });
-
-		container.innerHTML = '';
-		container.style.width = `${viewport.width}px`;
-		container.style.height = `${viewport.height}px`;
-		container.style.position = 'relative';
-
-		const canvas = document.createElement('canvas');
-		const dpr = window.devicePixelRatio || 1;
-		canvas.width = Math.floor(viewport.width * dpr);
-		canvas.height = Math.floor(viewport.height * dpr);
-		canvas.style.width = `${viewport.width}px`;
-		canvas.style.height = `${viewport.height}px`;
-
-		const ctx = canvas.getContext('2d');
-		if (!ctx) return;
-
-		ctx.scale(dpr, dpr);
-		container.appendChild(canvas);
-
-		await page.render({ canvasContext: ctx, viewport }).promise;
-
-		const textContent = await page.getTextContent();
-		const textDiv = document.createElement('div');
-		textDiv.className = 'textLayer';
-		container.appendChild(textDiv);
-
-		const textLayer = new TextLayer({
-			textContentSource: textContent,
-			container: textDiv,
-			viewport
-		});
-		await textLayer.render();
 	}
 
 	async function renderAllPages(doc: PDFDocumentProxy, currentScale: number): Promise<void> {
@@ -355,16 +315,6 @@
 	.page-wrapper {
 		background: white;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-	}
-
-	.page-wrapper :global(.textLayer) {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		overflow: hidden;
-		line-height: 1;
 	}
 
 	.status {
