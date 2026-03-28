@@ -1,6 +1,8 @@
 import { TextLayer } from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
 
+const PDF_TO_CSS_UNITS = 96 / 72;
+
 export async function renderPage(
 	page: PDFPageProxy,
 	container: HTMLDivElement,
@@ -12,6 +14,14 @@ export async function renderPage(
 	container.style.width = `${viewport.width}px`;
 	container.style.height = `${viewport.height}px`;
 	container.style.position = 'relative';
+
+	// pdf.js TextLayer CSS uses --total-scale-factor for font sizing and
+	// container dimensions. Normally set by PDFViewer on .pdfViewer .page,
+	// but we use TextLayer standalone so must set it ourselves.
+	container.style.setProperty(
+		'--total-scale-factor',
+		`${currentScale * PDF_TO_CSS_UNITS}`
+	);
 
 	const canvas = document.createElement('canvas');
 	const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
@@ -26,7 +36,7 @@ export async function renderPage(
 	ctx.scale(dpr, dpr);
 	container.appendChild(canvas);
 
-	await page.render({ canvasContext: ctx, viewport }).promise;
+	await page.render({ canvasContext: ctx, canvas, viewport }).promise;
 
 	const textContent = await page.getTextContent();
 	const textDiv = document.createElement('div');

@@ -95,4 +95,20 @@ describe('renderPage', () => {
 		expect(textLayer.style.lineHeight).toBe('');
 		expect(textLayer.style.overflow).toBe('');
 	});
+
+	it('sets --total-scale-factor CSS variable on container', async () => {
+		await renderPage(fakePage as any, container, 1.5);
+
+		const value = container.style.getPropertyValue('--total-scale-factor');
+		expect(value).not.toBe('');
+		// scale * PDF_TO_CSS_UNITS (96/72 = 1.333...)
+		expect(parseFloat(value)).toBeCloseTo(1.5 * (96 / 72), 4);
+	});
+
+	it('sets --total-scale-factor at default scale', async () => {
+		await renderPage(fakePage as any, container, 1.0);
+
+		const value = container.style.getPropertyValue('--total-scale-factor');
+		expect(parseFloat(value)).toBeCloseTo(96 / 72, 4);
+	});
 });
