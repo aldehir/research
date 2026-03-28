@@ -4,18 +4,16 @@
 	import UploadZone from '$lib/UploadZone.svelte';
 	import ChatPanel from '$lib/ChatPanel.svelte';
 	import { papersStore } from '$lib/papers.svelte';
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let uploading = $state(false);
 	let uploadError = $state<string | null>(null);
 
-	onMount(async () => {
-		try {
-			await papersStore.load();
-		} catch (e) {
-			console.error('Failed to load papers:', e);
-		}
+	$effect(() => {
+		untrack(() => {
+			papersStore.load().catch((e) => console.error('Failed to load papers:', e));
+		});
 	});
 
 	async function handleHeaderUpload(event: Event) {
