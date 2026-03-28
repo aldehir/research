@@ -25,7 +25,7 @@
 - [x] 06 — Frontend: Paper Library `COMPLETE`
 - [x] 07 — Frontend: PDF Viewer `COMPLETE`
 - [x] 08 — Text Selection & Context `COMPLETE`
-- [ ] 09 — Chat Sessions API `TODO`
+- [x] 09 — Chat Sessions API `COMPLETE`
 - [ ] 10 — Anthropic Client `TODO`
 - [ ] 11 — Messages Endpoint + SSE `TODO`
 - [ ] 12 — Frontend: Chat Panel `TODO`
