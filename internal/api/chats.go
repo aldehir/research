@@ -4,29 +4,30 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/aldehir/research/internal/store"
 )
 
-func handleListChatSessions(db *sql.DB) http.HandlerFunc {
+func handleListChatSessions(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		paperID := r.PathValue("id")
 
 		_, err := store.GetPaper(db, paperID)
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "paper not found")
+			writeError(w, http.StatusNotFound, "paper not found", logger)
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to get paper")
+			writeError(w, http.StatusInternalServerError, "failed to get paper", logger)
 			return
 		}
 
 		sessions, err := store.ListChatSessions(db, paperID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to list chat sessions")
+			writeError(w, http.StatusInternalServerError, "failed to list chat sessions", logger)
 			return
 		}
 		if sessions == nil {
@@ -36,17 +37,17 @@ func handleListChatSessions(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func handleCreateChatSession(db *sql.DB) http.HandlerFunc {
+func handleCreateChatSession(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		paperID := r.PathValue("id")
 
 		_, err := store.GetPaper(db, paperID)
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "paper not found")
+			writeError(w, http.StatusNotFound, "paper not found", logger)
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to get paper")
+			writeError(w, http.StatusInternalServerError, "failed to get paper", logger)
 			return
 		}
 
@@ -54,13 +55,13 @@ func handleCreateChatSession(db *sql.DB) http.HandlerFunc {
 			Title string `json:"title"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			writeError(w, http.StatusBadRequest, "invalid JSON body", logger)
 			return
 		}
 
 		id, err := newUUID()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to generate ID")
+			writeError(w, http.StatusInternalServerError, "failed to generate ID", logger)
 			return
 		}
 
@@ -78,7 +79,7 @@ func handleCreateChatSession(db *sql.DB) http.HandlerFunc {
 		}
 
 		if err := store.CreateChatSession(db, session); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to create chat session")
+			writeError(w, http.StatusInternalServerError, "failed to create chat session", logger)
 			return
 		}
 
@@ -86,17 +87,17 @@ func handleCreateChatSession(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func handleGetChatSession(db *sql.DB) http.HandlerFunc {
+func handleGetChatSession(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		chatID := r.PathValue("chatId")
 
 		result, err := store.GetChatSessionWithMessages(db, chatID)
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "chat session not found")
+			writeError(w, http.StatusNotFound, "chat session not found", logger)
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to get chat session")
+			writeError(w, http.StatusInternalServerError, "failed to get chat session", logger)
 			return
 		}
 
@@ -104,17 +105,17 @@ func handleGetChatSession(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func handleDeleteChatSession(db *sql.DB) http.HandlerFunc {
+func handleDeleteChatSession(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		chatID := r.PathValue("chatId")
 
 		err := store.DeleteChatSession(db, chatID)
 		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "chat session not found")
+			writeError(w, http.StatusNotFound, "chat session not found", logger)
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to delete chat session")
+			writeError(w, http.StatusInternalServerError, "failed to delete chat session", logger)
 			return
 		}
 

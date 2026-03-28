@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -20,13 +21,13 @@ type ChatStreamer interface {
 	Stream(ctx context.Context, req anthropic.Request) (<-chan anthropic.StreamEvent, error)
 }
 
-func handleSendMessage(db *sql.DB, chat ChatStreamer) http.HandlerFunc {
+func handleSendMessage(db *sql.DB, chat ChatStreamer, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		chatID := r.PathValue("chatId")
 
 		// Check if chat streamer is available
 		if chat == nil {
-			writeError(w, http.StatusServiceUnavailable, "chat features unavailable")
+			writeError(w, http.StatusServiceUnavailable, "chat features unavailable", logger)
 			return
 		}
 
@@ -37,30 +38,30 @@ func handleSendMessage(db *sql.DB, chat ChatStreamer) http.HandlerFunc {
 			SurroundingText string `json:"surrounding_text"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid JSON body")
+			writeError(w, http.StatusBadRequest, "invalid JSON body", logger)
 			return
 		}
 
 		if body.Content == "" {
-			writeError(w, http.StatusBadRequest, "content is required")
+			writeError(w, http.StatusBadRequest, "content is required", logger)
 			return
 		}
 
 		// Validate chat session exists
 		_, err := store.GetChatSession(db, chatID)
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "chat session not found")
+			writeError(w, http.StatusNotFound, "chat session not found", logger)
 			return
 		}
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to get chat session")
+			writeError(w, http.StatusInternalServerError, "failed to get chat session", logger)
 			return
 		}
 
 		// Store user message
 		msgID, err := newUUID()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to generate ID")
+			writeError(w, http.StatusInternalServerError, "failed to generate ID", logger)
 			return
 		}
 
@@ -83,14 +84,14 @@ func handleSendMessage(db *sql.DB, chat ChatStreamer) http.HandlerFunc {
 			CreatedAt:       time.Now().UTC().Format(time.RFC3339),
 		}
 		if err := store.CreateMessage(db, userMsg); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to store message")
+			writeError(w, http.StatusInternalServerError, "failed to store message", logger)
 			return
 		}
 
 		// Load all messages for conversation history
 		messages, err := store.ListMessages(db, chatID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load messages")
+			writeError(w, http.StatusInternalServerError, "failed to load messages", logger)
 			return
 		}
 
@@ -118,6 +119,7 @@ func handleSendMessage(db *sql.DB, chat ChatStreamer) http.HandlerFunc {
 		// Call stream
 		ch, err := chat.Stream(r.Context(), req)
 		if err != nil {
+			logger.Error("stream start failed", "chat_id", chatID, "error", err)
 			// Already set SSE headers, so send error as SSE event
 			fmt.Fprintf(w, "data: %s\n\n", mustJSON(sseResponse{Type: "error", Error: err.Error()}))
 			if f, ok := w.(http.Flusher); ok {

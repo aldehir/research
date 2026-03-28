@@ -2,13 +2,19 @@ package store
 
 import (
 	"database/sql"
+	"log/slog"
 
 	_ "modernc.org/sqlite"
 )
 
 // Open opens a SQLite database at the given DSN, enables foreign keys,
 // and runs schema migrations.
-func Open(dsn string) (*sql.DB, error) {
+func Open(dsn string, logger ...*slog.Logger) (*sql.DB, error) {
+	log := slog.Default()
+	if len(logger) > 0 && logger[0] != nil {
+		log = logger[0]
+	}
+
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -24,6 +30,7 @@ func Open(dsn string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	log.Info("database opened", "dsn", dsn)
 	return db, nil
 }
 

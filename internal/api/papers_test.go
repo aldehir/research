@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +21,7 @@ func testMux(t *testing.T) (*http.ServeMux, *store.TestDB, *pdf.Storage) {
 	t.Helper()
 	tdb := store.NewTestDB(t)
 	storage := pdf.NewStorage(filepath.Join(t.TempDir(), "pdfs"))
-	mux := NewMux(tdb.DB, storage, nil)
+	mux := NewMux(tdb.DB, storage, nil, slog.Default())
 	return mux, tdb, storage
 }
 

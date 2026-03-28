@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestHealthCheck(t *testing.T) {
-	mux := NewMux(nil, nil, nil)
+	mux := NewMux(nil, nil, nil, slog.Default())
 
 	t.Run("returns 200 with status ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)

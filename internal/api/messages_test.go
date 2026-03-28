@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -302,5 +303,5 @@ func TestSendMessage(t *testing.T) {
 func testMuxWithChat(t *testing.T, tdb *store.TestDB, chat ChatStreamer) *http.ServeMux {
 	t.Helper()
 	storage := pdf.NewStorage(t.TempDir())
-	return NewMux(tdb.DB, storage, chat)
+	return NewMux(tdb.DB, storage, chat, slog.Default())
 }

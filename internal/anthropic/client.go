@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
 	Model      string
+	Logger     *slog.Logger
 }
 
 type Message struct {
@@ -42,7 +44,15 @@ func NewClient(apiKey string) *Client {
 		BaseURL:    "https://api.anthropic.com",
 		HTTPClient: &http.Client{Timeout: 5 * time.Minute},
 		Model:      "claude-sonnet-4-20250514",
+		Logger:     slog.Default(),
 	}
+}
+
+func (c *Client) logger() *slog.Logger {
+	if c.Logger != nil {
+		return c.Logger
+	}
+	return slog.Default()
 }
 
 type apiRequest struct {
@@ -64,6 +74,8 @@ type sseDelta struct {
 }
 
 func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, error) {
+	log := c.logger()
+
 	systemPrompt := req.SystemPrompt
 	if systemPrompt == "" {
 		systemPrompt = BuildSystemPrompt(req.SelectedText, req.SurroundingText)
@@ -91,13 +103,17 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	httpReq.Header.Set("anthropic-version", "2023-06-01")
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	log.Info("stream starting", "model", c.Model, "messages", len(req.Messages))
+
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
+		log.Error("stream request failed", "error", err)
 		return nil, fmt.Errorf("send request: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
+		log.Error("anthropic api error", "status", resp.StatusCode)
 		return nil, fmt.Errorf("anthropic api: status %d", resp.StatusCode)
 	}
 
@@ -106,6 +122,7 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 		defer close(ch)
 		defer resp.Body.Close()
 		c.readSSE(ctx, resp, ch)
+		log.Debug("stream completed")
 	}()
 
 	return ch, nil

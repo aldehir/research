@@ -1,9 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -29,36 +28,40 @@ func main() {
 		pdfDir = v
 	}
 
-	db, err := store.Open(dbPath)
+	logger := slog.Default()
+
+	db, err := store.Open(dbPath, logger)
 	if err != nil {
-		log.Fatalf("open database: %v", err)
+		logger.Error("open database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	var chat api.ChatStreamer
 	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
 		chat = anthropic.NewClient(apiKey)
-		log.Println("Anthropic API client initialized")
+		logger.Info("Anthropic API client initialized")
 	} else {
-		log.Println("WARNING: ANTHROPIC_API_KEY not set, chat features will be unavailable")
+		logger.Warn("ANTHROPIC_API_KEY not set, chat features will be unavailable")
 	}
 	storage := pdf.NewStorage(pdfDir)
-	mux := api.NewMux(db, storage, chat)
+	mux := api.NewMux(db, storage, chat, logger)
 
-	serveFrontend(mux)
+	serveFrontend(mux, logger)
 
-	fmt.Printf("Listening on %s\n", addr)
+	logger.Info("server starting", "addr", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatal(err)
+		logger.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }
 
-func serveFrontend(mux *http.ServeMux) {
+func serveFrontend(mux *http.ServeMux, logger *slog.Logger) {
 	const buildDir = "frontend/build"
 
 	info, err := os.Stat(buildDir)
 	if err != nil || !info.IsDir() {
-		log.Printf("Frontend build directory %q not found, skipping static file serving", buildDir)
+		logger.Info("frontend build directory not found, skipping static file serving", "dir", buildDir)
 		return
 	}
 

@@ -3,24 +3,26 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/aldehir/research/internal/pdf"
 )
 
-func NewMux(db *sql.DB, storage *pdf.Storage, chat ChatStreamer) *http.ServeMux {
+func NewMux(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logger *slog.Logger) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", handleHealth)
-	mux.HandleFunc("GET /api/papers", handleListPapers(db))
-	mux.HandleFunc("POST /api/papers", handleUploadPaper(db, storage))
-	mux.HandleFunc("GET /api/papers/{id}", handleGetPaper(db))
-	mux.HandleFunc("GET /api/papers/{id}/pdf", handleServePDF(db, storage))
-	mux.HandleFunc("DELETE /api/papers/{id}", handleDeletePaper(db, storage))
-	mux.HandleFunc("GET /api/papers/{id}/chats", handleListChatSessions(db))
-	mux.HandleFunc("POST /api/papers/{id}/chats", handleCreateChatSession(db))
-	mux.HandleFunc("GET /api/papers/{id}/chats/{chatId}", handleGetChatSession(db))
-	mux.HandleFunc("DELETE /api/papers/{id}/chats/{chatId}", handleDeleteChatSession(db))
-	mux.HandleFunc("POST /api/papers/{id}/chats/{chatId}/messages", handleSendMessage(db, chat))
+	wrap := requestLogger(logger)
+	mux.Handle("GET /api/health", wrap(http.HandlerFunc(handleHealth)))
+	mux.Handle("GET /api/papers", wrap(handleListPapers(db, logger)))
+	mux.Handle("POST /api/papers", wrap(handleUploadPaper(db, storage, logger)))
+	mux.Handle("GET /api/papers/{id}", wrap(handleGetPaper(db, logger)))
+	mux.Handle("GET /api/papers/{id}/pdf", wrap(handleServePDF(db, storage, logger)))
+	mux.Handle("DELETE /api/papers/{id}", wrap(handleDeletePaper(db, storage, logger)))
+	mux.Handle("GET /api/papers/{id}/chats", wrap(handleListChatSessions(db, logger)))
+	mux.Handle("POST /api/papers/{id}/chats", wrap(handleCreateChatSession(db, logger)))
+	mux.Handle("GET /api/papers/{id}/chats/{chatId}", wrap(handleGetChatSession(db, logger)))
+	mux.Handle("DELETE /api/papers/{id}/chats/{chatId}", wrap(handleDeleteChatSession(db, logger)))
+	mux.Handle("POST /api/papers/{id}/chats/{chatId}/messages", wrap(handleSendMessage(db, chat, logger)))
 	return mux
 }
 
