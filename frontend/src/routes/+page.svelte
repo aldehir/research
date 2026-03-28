@@ -5,6 +5,14 @@
 	import ChatPanel from '$lib/ChatPanel.svelte';
 	import { papersStore } from '$lib/papers.svelte';
 	import { untrack } from 'svelte';
+	import {
+		getActivePanel,
+		getIsMobile,
+		setIsMobile,
+		toggleSidebar,
+		toggleChat,
+		closePanel
+	} from '$lib/mobile-layout.svelte';
 
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let uploading = $state(false);
@@ -14,6 +22,17 @@
 		untrack(() => {
 			papersStore.load().catch((e) => console.error('Failed to load papers:', e));
 		});
+	});
+
+	// Track viewport width via matchMedia
+	$effect(() => {
+		const mql = window.matchMedia('(max-width: 1023px)');
+		function onChange(e: MediaQueryList | MediaQueryListEvent) {
+			setIsMobile(e.matches);
+		}
+		onChange(mql);
+		mql.addEventListener('change', onChange);
+		return () => mql.removeEventListener('change', onChange);
 	});
 
 	async function handleHeaderUpload(event: Event) {
@@ -40,6 +59,13 @@
 
 <div class="app-shell">
 	<header class="app-header">
+		{#if getIsMobile()}
+			<button
+				class="mobile-toggle sidebar-toggle"
+				onclick={toggleSidebar}
+				aria-label="Toggle sidebar"
+			>&#9776;</button>
+		{/if}
 		<h1 class="app-title">Research Reader</h1>
 		<div class="header-actions">
 			{#if uploadError}
@@ -59,14 +85,37 @@
 			>
 				{uploading ? 'Uploading...' : 'Upload PDF'}
 			</button>
+			{#if getIsMobile() && papersStore.selectedPaper}
+				<button
+					class="mobile-toggle chat-toggle"
+					onclick={toggleChat}
+					aria-label="Toggle chat"
+				>&#x1F4AC;</button>
+			{/if}
 		</div>
 	</header>
 	<div class="app-layout">
-		<aside class="sidebar">
-			<div class="sidebar-header">Papers</div>
-			<PaperList />
-			<UploadZone />
-		</aside>
+		{#if getIsMobile()}
+			{#if getActivePanel()}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="backdrop" onclick={closePanel}></div>
+			{/if}
+			<aside
+				class="sidebar mobile-overlay from-left"
+				class:open={getActivePanel() === 'sidebar'}
+			>
+				<div class="sidebar-header">Papers</div>
+				<PaperList />
+				<UploadZone />
+			</aside>
+		{:else}
+			<aside class="sidebar">
+				<div class="sidebar-header">Papers</div>
+				<PaperList />
+				<UploadZone />
+			</aside>
+		{/if}
 		<main class="content">
 			{#if papersStore.selectedPaper}
 				<PdfViewer paperId={papersStore.selectedPaper.id} />
@@ -75,7 +124,16 @@
 			{/if}
 		</main>
 		{#if papersStore.selectedPaper}
-			<ChatPanel paperId={papersStore.selectedPaper.id} />
+			{#if getIsMobile()}
+				<div
+					class="chat-overlay-wrapper mobile-overlay from-right"
+					class:open={getActivePanel() === 'chat'}
+				>
+					<ChatPanel paperId={papersStore.selectedPaper.id} />
+				</div>
+			{:else}
+				<ChatPanel paperId={papersStore.selectedPaper.id} />
+			{/if}
 		{/if}
 	</div>
 </div>
@@ -146,6 +204,7 @@
 		display: flex;
 		flex: 1;
 		min-height: 0;
+		position: relative;
 	}
 
 	.sidebar-header {
@@ -172,7 +231,7 @@
 		display: flex;
 		flex-direction: column;
 		color: #666;
-		min-width: 300px;
+		min-width: 0;
 		overflow: hidden;
 	}
 
@@ -184,5 +243,96 @@
 	.placeholder {
 		color: #999;
 		font-size: 1.1rem;
+	}
+
+	/* Mobile toggle buttons */
+	.mobile-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border: none;
+		background: none;
+		color: #fff;
+		font-size: 1.25rem;
+		cursor: pointer;
+		flex-shrink: 0;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.mobile-toggle:hover {
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+	}
+
+	/* Backdrop overlay */
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		top: 48px;
+		background: rgba(0, 0, 0, 0.4);
+		z-index: 90;
+	}
+
+	/* Slide-over panel base */
+	.mobile-overlay {
+		position: fixed;
+		top: 48px;
+		bottom: 0;
+		z-index: 100;
+		transition: transform 250ms ease;
+	}
+
+	.mobile-overlay.from-left {
+		left: 0;
+		transform: translateX(-100%);
+	}
+
+	.mobile-overlay.from-right {
+		right: 0;
+		transform: translateX(100%);
+	}
+
+	.mobile-overlay.open {
+		transform: translateX(0);
+	}
+
+	/* Mobile sidebar overlay */
+	.sidebar.mobile-overlay {
+		width: 280px;
+		min-width: 0;
+		box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+	}
+
+	/* Mobile chat overlay */
+	.chat-overlay-wrapper {
+		width: 70vw;
+		max-width: 400px;
+		min-width: 280px;
+		display: flex;
+		flex-direction: column;
+		background: #fff;
+		box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
+	}
+
+	/* On mobile, override chat panel to fill the wrapper */
+	.chat-overlay-wrapper :global(.chat-panel) {
+		width: 100%;
+		min-width: 0;
+		border-left: none;
+	}
+
+	/* Mobile touch target sizing */
+	@media (max-width: 1023px) {
+		.upload-btn {
+			min-height: 44px;
+			min-width: 44px;
+			padding: 0.5rem 1rem;
+		}
+
+		.content {
+			min-width: 0;
+		}
 	}
 </style>

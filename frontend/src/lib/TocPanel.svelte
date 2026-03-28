@@ -179,4 +179,20 @@
 		padding: 2rem 1rem;
 		margin: 0;
 	}
+
+	@media (max-width: 1023px) {
+		.toc-toggle {
+			min-width: 44px;
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.toc-title {
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+		}
+	}
 </style>

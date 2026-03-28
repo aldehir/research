@@ -3,6 +3,7 @@
 	import MessageThread from '$lib/MessageThread.svelte';
 	import MessageInput from '$lib/MessageInput.svelte';
 	import { loadSessions, getActiveSessionId, resetChat } from '$lib/chat.svelte';
+	import { getIsMobile } from '$lib/mobile-layout.svelte';
 
 	interface Props {
 		paperId: string;
@@ -21,7 +22,7 @@
 	});
 </script>
 
-{#if collapsed}
+{#if !getIsMobile() && collapsed}
 	<div class="chat-collapsed">
 		<button class="toggle-btn" onclick={() => collapsed = false} aria-label="Open chat">
 			&#x25C0;
@@ -31,9 +32,11 @@
 	<div class="chat-panel">
 		<div class="chat-header">
 			<h3>Chat</h3>
-			<button class="toggle-btn" onclick={() => collapsed = true} aria-label="Close chat">
-				&#x25B6;
-			</button>
+			{#if !getIsMobile()}
+				<button class="toggle-btn" onclick={() => collapsed = true} aria-label="Close chat">
+					&#x25B6;
+				</button>
+			{/if}
 		</div>
 		<ChatSessionList {paperId} />
 		{#if getActiveSessionId()}
@@ -98,5 +101,12 @@
 		justify-content: center;
 		color: #888;
 		font-size: 0.9rem;
+	}
+
+	@media (max-width: 1023px) {
+		.toggle-btn {
+			min-width: 44px;
+			min-height: 44px;
+		}
 	}
 </style>

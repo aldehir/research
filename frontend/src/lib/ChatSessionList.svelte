@@ -143,4 +143,25 @@
 	.delete-btn:hover {
 		color: #e00;
 	}
+
+	@media (max-width: 1023px) {
+		.new-chat-btn {
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+		}
+
+		.session-item {
+			min-height: 44px;
+			padding: 0.5rem 1rem;
+		}
+
+		.delete-btn {
+			min-width: 44px;
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+	}
 </style>

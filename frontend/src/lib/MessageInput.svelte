@@ -192,4 +192,24 @@
 	.chip-remove:hover {
 		color: #333;
 	}
+
+	@media (max-width: 1023px) {
+		.send-btn {
+			min-width: 44px;
+			min-height: 44px;
+		}
+
+		.quote-btn {
+			min-width: 44px;
+			min-height: 44px;
+		}
+
+		.chip-remove {
+			min-width: 44px;
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+	}
 </style>

@@ -650,4 +650,22 @@
 	.status.error {
 		color: #ff6b6b;
 	}
+
+	@media (max-width: 1023px) {
+		.toolbar {
+			padding: 0.35rem 0.5rem;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+
+		.toolbar button {
+			min-width: 44px;
+			min-height: 44px;
+			padding: 0.25rem 0.5rem;
+		}
+
+		.page-jump {
+			min-height: 44px;
+		}
+	}
 </style>
