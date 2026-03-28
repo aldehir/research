@@ -24,5 +24,8 @@
     "onlyBuiltDependencies": [
       "esbuild"
     ]
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.5.207"
   }
 }

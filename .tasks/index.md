@@ -23,7 +23,7 @@
 - [x] 04 — PDF Upload & Storage `COMPLETE`
 - [x] 05 — PDF Serving `COMPLETE`
 - [x] 06 — Frontend: Paper Library `COMPLETE`
-- [ ] 07 — Frontend: PDF Viewer `TODO`
+- [x] 07 — Frontend: PDF Viewer `COMPLETE`
 - [ ] 08 — Text Selection & Context `TODO`
 - [ ] 09 — Chat Sessions API `TODO`
 - [ ] 10 — Anthropic Client `TODO`

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PaperList from '$lib/PaperList.svelte';
+	import PdfViewer from '$lib/PdfViewer.svelte';
 	import UploadZone from '$lib/UploadZone.svelte';
 	import { loadPapers, getSelectedPaper } from '$lib/papers.svelte';
 	import { onMount } from 'svelte';
@@ -17,8 +18,7 @@
 	</aside>
 	<main class="content">
 		{#if getSelectedPaper()}
-			<p>Selected: {getSelectedPaper()?.title}</p>
-			<p class="placeholder">PDF viewer coming soon...</p>
+			<PdfViewer paperId={getSelectedPaper()!.id} />
 		{:else}
 			<p class="placeholder">Select a paper to view</p>
 		{/if}
@@ -51,10 +51,15 @@
 	.content {
 		flex: 1;
 		display: flex;
-		align-items: center;
-		justify-content: center;
 		flex-direction: column;
 		color: #666;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.content:has(.placeholder) {
+		align-items: center;
+		justify-content: center;
 	}
 
 	.placeholder {
