@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/aldehir/research/internal/anthropic"
 	"github.com/aldehir/research/internal/api"
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
@@ -33,6 +34,15 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 	defer db.Close()
+
+	var aiClient *anthropic.Client
+	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+		aiClient = anthropic.NewClient(apiKey)
+		log.Println("Anthropic API client initialized")
+	} else {
+		log.Println("WARNING: ANTHROPIC_API_KEY not set, chat features will be unavailable")
+	}
+	_ = aiClient // will be used in Task 11
 
 	storage := pdf.NewStorage(pdfDir)
 	mux := api.NewMux(db, storage)
