@@ -43,17 +43,20 @@ vi.mock('pdfjs-dist', () => {
 });
 
 // Import the render helper (will be extracted from PdfViewer)
-import { renderPage, renderAnnotations, clearPage, getPageDimensions } from '$lib/pdf-render';
+import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
+
+// Base unscaled PDF page dimensions (in PDF points)
+const PAGE_WIDTH = 612;
+const PAGE_HEIGHT = 792;
 
 describe('renderPage', () => {
 	let container: HTMLDivElement;
-	const fakeViewport = {
-		width: 612,
-		height: 792
-	};
 
 	const fakePage = {
-		getViewport: () => fakeViewport,
+		getViewport: ({ scale }: { scale: number }) => ({
+			width: PAGE_WIDTH * scale,
+			height: PAGE_HEIGHT * scale
+		}),
 		getTextContent: async () => ({ items: [], styles: {} }),
 		render: () => ({ promise: Promise.resolve() })
 	};
@@ -77,19 +80,35 @@ describe('renderPage', () => {
 		expect(textLayer!.tagName).toBe('DIV');
 	});
 
-	it('sets container dimensions from viewport', async () => {
+	it('sets container dimensions including PDF_TO_CSS_UNITS factor', async () => {
 		await renderPage(fakePage as any, container, 1.0);
 
-		expect(container.style.width).toBe('612px');
-		expect(container.style.height).toBe('792px');
+		const expectedWidth = PAGE_WIDTH * PDF_TO_CSS_UNITS;
+		const expectedHeight = PAGE_HEIGHT * PDF_TO_CSS_UNITS;
+		expect(container.style.width).toBe(`${expectedWidth}px`);
+		expect(container.style.height).toBe(`${expectedHeight}px`);
 	});
 
-	it('sets canvas CSS dimensions to match viewport', async () => {
+	it('sets canvas CSS dimensions including PDF_TO_CSS_UNITS factor', async () => {
 		await renderPage(fakePage as any, container, 1.0);
 
 		const canvas = container.querySelector('canvas')!;
-		expect(canvas.style.width).toBe('612px');
-		expect(canvas.style.height).toBe('792px');
+		const expectedWidth = PAGE_WIDTH * PDF_TO_CSS_UNITS;
+		const expectedHeight = PAGE_HEIGHT * PDF_TO_CSS_UNITS;
+		expect(canvas.style.width).toBe(`${expectedWidth}px`);
+		expect(canvas.style.height).toBe(`${expectedHeight}px`);
+	});
+
+	it('creates viewport with scale * PDF_TO_CSS_UNITS', async () => {
+		const getViewportSpy = vi.fn(({ scale }: { scale: number }) => ({
+			width: PAGE_WIDTH * scale,
+			height: PAGE_HEIGHT * scale
+		}));
+		const spyPage = { ...fakePage, getViewport: getViewportSpy };
+
+		await renderPage(spyPage as any, container, 1.5);
+
+		expect(getViewportSpy).toHaveBeenCalledWith({ scale: 1.5 * PDF_TO_CSS_UNITS });
 	});
 
 	it('renders text content into textLayer', async () => {
@@ -161,34 +180,35 @@ describe('clearPage', () => {
 });
 
 describe('getPageDimensions', () => {
-	const fakeViewport = { width: 612, height: 792 };
 	const fakePage = {
 		getViewport: ({ scale }: { scale: number }) => ({
-			width: 612 * scale,
-			height: 792 * scale
+			width: PAGE_WIDTH * scale,
+			height: PAGE_HEIGHT * scale
 		}),
 		getTextContent: async () => ({ items: [], styles: {} }),
 		render: () => ({ promise: Promise.resolve() })
 	};
 
-	it('returns width and height at given scale', () => {
+	it('returns dimensions including PDF_TO_CSS_UNITS at scale 1.0', () => {
 		const dims = getPageDimensions(fakePage as any, 1.0);
-		expect(dims.width).toBe(612);
-		expect(dims.height).toBe(792);
+		expect(dims.width).toBeCloseTo(PAGE_WIDTH * PDF_TO_CSS_UNITS, 4);
+		expect(dims.height).toBeCloseTo(PAGE_HEIGHT * PDF_TO_CSS_UNITS, 4);
 	});
 
-	it('scales dimensions with scale factor', () => {
+	it('scales dimensions with scale factor and PDF_TO_CSS_UNITS', () => {
 		const dims = getPageDimensions(fakePage as any, 2.0);
-		expect(dims.width).toBe(1224);
-		expect(dims.height).toBe(1584);
+		expect(dims.width).toBeCloseTo(PAGE_WIDTH * 2.0 * PDF_TO_CSS_UNITS, 4);
+		expect(dims.height).toBeCloseTo(PAGE_HEIGHT * 2.0 * PDF_TO_CSS_UNITS, 4);
 	});
 });
 
 describe('renderAnnotations', () => {
 	let container: HTMLDivElement;
-	const fakeViewport = { width: 612, height: 792 };
 	const fakePage = {
-		getViewport: () => fakeViewport,
+		getViewport: ({ scale }: { scale: number }) => ({
+			width: PAGE_WIDTH * scale,
+			height: PAGE_HEIGHT * scale
+		}),
 		getAnnotations: async () => [
 			{ annotationType: 2, url: 'https://example.com' },
 			{ annotationType: 2, dest: [1, { name: 'Fit' }] }

@@ -4,7 +4,7 @@
 	import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 	import { getPdfUrl } from '$lib/api';
 	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale } from '$lib/pdf-utils';
-	import { renderPage, renderAnnotations, clearPage, getPageDimensions } from '$lib/pdf-render';
+	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -66,7 +66,7 @@
 
 	function computeFitScale(): number | null {
 		if (!scrollContainer || pages.length === 0) return null;
-		const pageWidth = pages[0].getViewport({ scale: 1.0 }).width;
+		const pageWidth = pages[0].getViewport({ scale: 1.0 }).width * PDF_TO_CSS_UNITS;
 		return fitToWidthScale(scrollContainer.clientWidth, pageWidth, CONTAINER_PADDING);
 	}
 
@@ -166,7 +166,7 @@
 
 			// Compute initial fit-to-width scale
 			if (scrollContainer && allPages.length > 0) {
-				const pageWidth = allPages[0].getViewport({ scale: 1.0 }).width;
+				const pageWidth = allPages[0].getViewport({ scale: 1.0 }).width * PDF_TO_CSS_UNITS;
 				scale = fitToWidthScale(scrollContainer.clientWidth, pageWidth, CONTAINER_PADDING);
 			}
 		} catch (e) {

@@ -1,13 +1,13 @@
 import { TextLayer, AnnotationLayer } from 'pdfjs-dist';
 import type { PDFPageProxy } from 'pdfjs-dist';
 
-const PDF_TO_CSS_UNITS = 96 / 72;
+export const PDF_TO_CSS_UNITS = 96 / 72;
 
 export function getPageDimensions(
 	page: PDFPageProxy,
 	scale: number
 ): { width: number; height: number } {
-	const viewport = page.getViewport({ scale });
+	const viewport = page.getViewport({ scale: scale * PDF_TO_CSS_UNITS });
 	return { width: viewport.width, height: viewport.height };
 }
 
@@ -24,7 +24,7 @@ export async function renderAnnotations(
 	const annotations = await page.getAnnotations();
 	if (annotations.length === 0) return;
 
-	const viewport = page.getViewport({ scale: currentScale });
+	const viewport = page.getViewport({ scale: currentScale * PDF_TO_CSS_UNITS });
 	const annotDiv = document.createElement('div');
 	annotDiv.className = 'annotationLayer';
 	container.appendChild(annotDiv);
@@ -57,7 +57,7 @@ export async function renderPage(
 	container: HTMLDivElement,
 	currentScale: number
 ): Promise<void> {
-	const viewport = page.getViewport({ scale: currentScale });
+	const viewport = page.getViewport({ scale: currentScale * PDF_TO_CSS_UNITS });
 
 	container.innerHTML = '';
 	container.style.width = `${viewport.width}px`;
