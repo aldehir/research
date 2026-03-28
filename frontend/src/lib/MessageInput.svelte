@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getIsStreaming, sendChatMessage, getActiveSessionId } from '$lib/chat.svelte';
-	import { getSelectedText, clearSelectedText, getSurroundingText, getCurrentPage } from '$lib/pdf-context.svelte';
+	import { getSelectedText, clearSelectedText, getCurrentPage } from '$lib/pdf-context.svelte';
 
 	interface Props {
 		paperId: string;
@@ -34,7 +34,6 @@
 		if (!content || !chatId || getIsStreaming()) return;
 
 		const selectedText = attachedSelection || undefined;
-		const surroundingText = await getSurroundingText() || undefined;
 		const currentPage = getCurrentPage();
 
 		inputText = '';
@@ -42,7 +41,7 @@
 		clearSelectedText();
 
 		await sendChatMessage(paperId, chatId, content,
-			{ selectedText, surroundingText, currentPage }
+			{ selectedText, currentPage }
 		);
 	}
 </script>

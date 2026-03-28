@@ -7,24 +7,19 @@ import (
 
 const basePrompt = "You are a helpful research paper reading assistant. " +
 	"Help the user understand academic papers, explain concepts, " +
-	"and answer questions about the content."
+	"and answer questions about the content. " +
+	"Each user message includes their current viewer context (page number and visible text)."
 
 // PromptContext holds all context for building the system prompt.
 type PromptContext struct {
 	DocumentTitle  string
 	DocumentAuthor string
 	DocumentDate   string
-	CurrentPage    int
 	TotalPages     int
-	SelectedText   string
-	SurroundingText string
 }
 
-func BuildSystemPrompt(selectedText, surroundingText string) string {
-	return BuildSystemPromptFromContext(PromptContext{
-		SelectedText:    selectedText,
-		SurroundingText: surroundingText,
-	})
+func BuildSystemPrompt(_, _ string) string {
+	return BuildSystemPromptFromContext(PromptContext{})
 }
 
 func BuildSystemPromptFromContext(ctx PromptContext) string {
@@ -49,17 +44,7 @@ func BuildSystemPromptFromContext(ctx PromptContext) string {
 	}
 
 	if ctx.TotalPages > 0 {
-		b.WriteString(fmt.Sprintf("\nThe user is currently viewing page %d of %d.", ctx.CurrentPage, ctx.TotalPages))
-	}
-
-	if ctx.SelectedText != "" {
-		b.WriteString("\n\nThe user has selected the following text from the paper:\n> ")
-		b.WriteString(ctx.SelectedText)
-	}
-
-	if ctx.SurroundingText != "" {
-		b.WriteString("\n\nSurrounding context from the paper:\n")
-		b.WriteString(ctx.SurroundingText)
+		b.WriteString(fmt.Sprintf("\nThe document has %d pages.", ctx.TotalPages))
 	}
 
 	return b.String()

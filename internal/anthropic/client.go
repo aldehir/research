@@ -41,16 +41,13 @@ type Message struct {
 }
 
 type Request struct {
-	Messages        []Message
-	SystemPrompt    string
-	SelectedText    string
-	SurroundingText string
-	DocumentTitle   string
-	DocumentAuthor  string
-	DocumentDate    string
-	CurrentPage     int
-	TotalPages      int
-	Tools           []Tool
+	Messages       []Message
+	SystemPrompt   string
+	DocumentTitle  string
+	DocumentAuthor string
+	DocumentDate   string
+	TotalPages     int
+	Tools          []Tool
 }
 
 type StreamEvent struct {
@@ -161,13 +158,10 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 	systemPrompt := req.SystemPrompt
 	if systemPrompt == "" {
 		systemPrompt = BuildSystemPromptFromContext(PromptContext{
-			DocumentTitle:   req.DocumentTitle,
-			DocumentAuthor:  req.DocumentAuthor,
-			DocumentDate:    req.DocumentDate,
-			CurrentPage:     req.CurrentPage,
-			TotalPages:      req.TotalPages,
-			SelectedText:    req.SelectedText,
-			SurroundingText: req.SurroundingText,
+			DocumentTitle:  req.DocumentTitle,
+			DocumentAuthor: req.DocumentAuthor,
+			DocumentDate:   req.DocumentDate,
+			TotalPages:     req.TotalPages,
 		})
 	}
 

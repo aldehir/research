@@ -90,11 +90,12 @@ func seedChatSession(t *testing.T, tdb *store.TestDB) store.ChatSession {
 }
 
 type sseEvent struct {
-	Type  string          `json:"type"`
-	Text  string          `json:"text,omitempty"`
-	Error string          `json:"error,omitempty"`
-	Name  string          `json:"name,omitempty"`
-	Args  json.RawMessage `json:"args,omitempty"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text,omitempty"`
+	Error     string          `json:"error,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Args      json.RawMessage `json:"args,omitempty"`
+	RequestID string          `json:"request_id,omitempty"`
 }
 
 func parseSSEEvents(t *testing.T, body string) []sseEvent {
@@ -275,7 +276,7 @@ func TestSendMessage(t *testing.T) {
 		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	})
 
-	t.Run("passes selected_text and surrounding_text to anthropic", func(t *testing.T) {
+	t.Run("appends viewer context to user message", func(t *testing.T) {
 		tdb := store.NewTestDB(t)
 		seedChatSession(t, tdb)
 
@@ -289,7 +290,7 @@ func TestSendMessage(t *testing.T) {
 		}
 		mux := testMuxWithChat(t, tdb, mock)
 
-		body := `{"content":"What is this?","selected_text":"some text","surrounding_text":"context around"}`
+		body := `{"content":"What is this?","current_page":5,"selected_text":"some formula"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -297,8 +298,41 @@ func TestSendMessage(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		require.NotNil(t, mock.captured)
-		assert.Equal(t, "some text", mock.captured.SelectedText)
-		assert.Equal(t, "context around", mock.captured.SurroundingText)
+
+		// The last user message should contain viewer context
+		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
+		assert.Contains(t, lastMsg.Content, "What is this?")
+		assert.Contains(t, lastMsg.Content, "Current page: 5")
+		assert.Contains(t, lastMsg.Content, "Selected text: some formula")
+		// Should NOT contain surrounding text
+		assert.NotContains(t, lastMsg.Content, "surrounding")
+	})
+
+	t.Run("no viewer context appended when no page info", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		seedChatSession(t, tdb)
+
+		mock := &captureStreamer{
+			mockStreamer: mockStreamer{
+				events: []anthropic.StreamEvent{
+					{Type: "content_block_delta", Text: "Ok"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+		mux := testMuxWithChat(t, tdb, mock)
+
+		body := `{"content":"Hello"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotNil(t, mock.captured)
+
+		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
+		assert.Equal(t, "Hello", lastMsg.Content)
 	})
 
 	t.Run("populates document metadata from paper record", func(t *testing.T) {
@@ -346,33 +380,7 @@ func TestSendMessage(t *testing.T) {
 		require.NotNil(t, mock.captured)
 		assert.Equal(t, "Relativity", mock.captured.DocumentTitle)
 		assert.Equal(t, "Einstein", mock.captured.DocumentAuthor)
-		assert.Equal(t, 5, mock.captured.CurrentPage)
 		assert.Equal(t, 20, mock.captured.TotalPages)
-	})
-
-	t.Run("passes current_page to anthropic request", func(t *testing.T) {
-		tdb := store.NewTestDB(t)
-		seedChatSession(t, tdb)
-
-		mock := &captureStreamer{
-			mockStreamer: mockStreamer{
-				events: []anthropic.StreamEvent{
-					{Type: "content_block_delta", Text: "Ok"},
-					{Type: "message_stop"},
-				},
-			},
-		}
-		mux := testMuxWithChat(t, tdb, mock)
-
-		body := `{"content":"What is on this page?","current_page":7}`
-		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		require.NotNil(t, mock.captured)
-		assert.Equal(t, 7, mock.captured.CurrentPage)
 	})
 
 	t.Run("stores selected_text on user message", func(t *testing.T) {

@@ -100,12 +100,16 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			return
 		}
 
-		// Convert to anthropic messages
+		// Convert to anthropic messages, appending viewer context to the latest user message
 		var anthropicMessages []anthropic.Message
 		for _, m := range messages {
+			content := m.Content
+			if m.Role == "user" && m.ID == userMsg.ID {
+				content = appendViewerContext(content, body.CurrentPage, body.SelectedText)
+			}
 			anthropicMessages = append(anthropicMessages, anthropic.Message{
 				Role:    m.Role,
-				Content: m.Content,
+				Content: content,
 			})
 		}
 
@@ -128,15 +132,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 
 		// Build request
 		req := anthropic.Request{
-			Messages:        anthropicMessages,
-			SelectedText:    body.SelectedText,
-			SurroundingText: body.SurroundingText,
-			CurrentPage:     body.CurrentPage,
-			DocumentTitle:   docTitle,
-			DocumentAuthor:  docAuthor,
-			DocumentDate:    docDate,
-			TotalPages:      totalPages,
-			Tools:           anthropic.PDFTools(),
+			Messages:       anthropicMessages,
+			DocumentTitle:  docTitle,
+			DocumentAuthor: docAuthor,
+			DocumentDate:   docDate,
+			TotalPages:     totalPages,
+			Tools:          anthropic.PDFTools(),
 		}
 
 		// Set SSE headers before calling Stream
@@ -304,6 +305,23 @@ func executeToolCall(name, input, pdfPath string, logger *slog.Logger) string {
 	default:
 		return fmt.Sprintf("Unknown tool: %s", name)
 	}
+}
+
+func appendViewerContext(content string, currentPage int, selectedText string) string {
+	if currentPage == 0 && selectedText == "" {
+		return content
+	}
+
+	var b strings.Builder
+	b.WriteString(content)
+	b.WriteString("\n\n[Viewer context]")
+	if currentPage > 0 {
+		b.WriteString(fmt.Sprintf("\nCurrent page: %d", currentPage))
+	}
+	if selectedText != "" {
+		b.WriteString(fmt.Sprintf("\nSelected text: %s", selectedText))
+	}
+	return b.String()
 }
 
 func mustJSON(v any) string {
