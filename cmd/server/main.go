@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/aldehir/research/internal/api"
+	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
 )
 
@@ -22,13 +23,19 @@ func main() {
 		dbPath = v
 	}
 
+	pdfDir := "./data/pdfs"
+	if v := os.Getenv("PDF_DIR"); v != "" {
+		pdfDir = v
+	}
+
 	db, err := store.Open(dbPath)
 	if err != nil {
 		log.Fatalf("open database: %v", err)
 	}
 	defer db.Close()
 
-	mux := api.NewMux(db)
+	storage := pdf.NewStorage(pdfDir)
+	mux := api.NewMux(db, storage)
 
 	serveFrontend(mux)
 

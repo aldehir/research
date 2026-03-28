@@ -20,7 +20,7 @@
 - [x] 01 — Project Scaffolding `COMPLETE`
 - [x] 02 — Database Setup `COMPLETE`
 - [ ] 03 — Papers CRUD API `IN PROGRESS`
-- [ ] 04 — PDF Upload & Storage `TODO`
+- [x] 04 — PDF Upload & Storage `COMPLETE`
 - [ ] 05 — PDF Serving `TODO`
 - [ ] 06 — Frontend: Paper Library `TODO`
 - [ ] 07 — Frontend: PDF Viewer `TODO`

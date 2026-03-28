@@ -4,14 +4,17 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+
+	"github.com/aldehir/research/internal/pdf"
 )
 
-func NewMux(db *sql.DB) *http.ServeMux {
+func NewMux(db *sql.DB, storage *pdf.Storage) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", handleHealth)
 	mux.HandleFunc("GET /api/papers", handleListPapers(db))
+	mux.HandleFunc("POST /api/papers", handleUploadPaper(db, storage))
 	mux.HandleFunc("GET /api/papers/{id}", handleGetPaper(db))
-	mux.HandleFunc("DELETE /api/papers/{id}", handleDeletePaper(db))
+	mux.HandleFunc("DELETE /api/papers/{id}", handleDeletePaper(db, storage))
 	return mux
 }
 
