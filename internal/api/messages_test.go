@@ -96,6 +96,8 @@ type sseEvent struct {
 	Error     string          `json:"error,omitempty"`
 	Name      string          `json:"name,omitempty"`
 	Args      json.RawMessage `json:"args,omitempty"`
+	Preview   string          `json:"preview,omitempty"`
+	Content   string          `json:"content,omitempty"`
 	RequestID string          `json:"request_id,omitempty"`
 }
 
@@ -605,6 +607,193 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 			}
 		}
 		require.NotNil(t, toolCallEvent)
+	})
+}
+
+func TestSendMessage_ToolResultSSE(t *testing.T) {
+	t.Run("emits tool_result SSE events after tool execution", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  "/test.pdf",
+			FileSize:  1000,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "Done"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"Go to page 3"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		events := parseSSEEvents(t, rec.Body.String())
+
+		// Find tool_result event
+		var toolResult *sseEvent
+		for i := range events {
+			if events[i].Type == "tool_result" {
+				toolResult = &events[i]
+				break
+			}
+		}
+		require.NotNil(t, toolResult, "should emit tool_result SSE event")
+		assert.Equal(t, "go_to_page", toolResult.Name)
+		assert.NotEmpty(t, toolResult.Text, "tool_result should include content")
+	})
+
+	t.Run("tool_result includes preview for large results", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		pdfPath := storage.Path("paper-1")
+		createTestPDFWithText(t, pdfPath, "Page one content here.")
+
+		pageCount := 1
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  pdfPath,
+			FileSize:  1000,
+			PageCount: &pageCount,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_2", ToolName: "read_page", ToolInput: `{"page":1}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "The page says..."},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"What's on page 1?"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		events := parseSSEEvents(t, rec.Body.String())
+
+		var toolResult *sseEvent
+		for i := range events {
+			if events[i].Type == "tool_result" {
+				toolResult = &events[i]
+				break
+			}
+		}
+		require.NotNil(t, toolResult, "should emit tool_result SSE event")
+		assert.Equal(t, "read_page", toolResult.Name)
+		assert.NotEmpty(t, toolResult.Text, "tool_result should include content")
+	})
+
+	t.Run("emits tool_result for each tool in multi-tool response", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		pdfPath := storage.Path("paper-1")
+		createTestPDFWithText(t, pdfPath, "Some content.")
+
+		pageCount := 1
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  pdfPath,
+			FileSize:  1000,
+			PageCount: &pageCount,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":1}`},
+					{Type: "tool_use", ToolUseID: "toolu_2", ToolName: "read_page", ToolInput: `{"page":1}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "Here it is"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, slog.Default())
+
+		body := `{"content":"Read page 1"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		events := parseSSEEvents(t, rec.Body.String())
+
+		var toolResults []sseEvent
+		for _, ev := range events {
+			if ev.Type == "tool_result" {
+				toolResults = append(toolResults, ev)
+			}
+		}
+		require.Len(t, toolResults, 2, "should emit tool_result for each tool call")
+		assert.Equal(t, "go_to_page", toolResults[0].Name)
+		assert.Equal(t, "read_page", toolResults[1].Name)
 	})
 }
 

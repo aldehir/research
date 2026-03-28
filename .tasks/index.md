@@ -13,3 +13,4 @@
 - [x] 09 — Add table of contents with page jumping `COMPLETE`
 - [x] 10 — Implement Anthropic tool calling for PDF interactions `COMPLETE`
 - [x] 11 — Add detailed logging for LLM messages and tool calling `COMPLETE`
+- [x] 12 — Add streaming output to chat panel `COMPLETE`

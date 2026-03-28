@@ -233,6 +233,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 					ToolUseID: tc.ToolUseID,
 					Content:   result,
 				})
+				sendSSE(sseToolResult{
+					Type:    "tool_result",
+					Name:    tc.ToolName,
+					Text:    result,
+					Preview: truncatePreview(result, toolResultPreviewLen),
+				})
 			}
 
 			// Append user message with tool_result blocks
@@ -274,6 +280,22 @@ type sseToolCall struct {
 	Type string          `json:"type"`
 	Name string          `json:"name"`
 	Args json.RawMessage `json:"args"`
+}
+
+type sseToolResult struct {
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Text    string `json:"text"`
+	Preview string `json:"preview"`
+}
+
+const toolResultPreviewLen = 200
+
+func truncatePreview(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func executeToolCall(name, input, pdfPath string, logger *slog.Logger) string {

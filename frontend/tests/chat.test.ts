@@ -248,6 +248,60 @@ describe('sendMessage', () => {
 		expect(body.surrounding_text).toBeUndefined();
 	});
 
+	it('calls onToolCall for tool_call events', async () => {
+		const stream = makeSSEStream([
+			'data: {"type":"tool_call","name":"search_pdf","args":{"query":"attention"}}',
+			'data: {"type":"done"}'
+		]);
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			body: stream
+		}));
+
+		const toolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+		const onDone = vi.fn();
+
+		await sendMessage(paperId, chatId, 'Find attention',
+			vi.fn(), onDone, vi.fn(), undefined,
+			(tool) => toolCalls.push(tool));
+
+		expect(toolCalls).toHaveLength(1);
+		expect(toolCalls[0].name).toBe('search_pdf');
+		expect(toolCalls[0].args).toEqual({ query: 'attention' });
+		expect(onDone).toHaveBeenCalledOnce();
+	});
+
+	it('calls onToolResult for tool_result events', async () => {
+		const stream = makeSSEStream([
+			'data: {"type":"tool_call","name":"read_page","args":{"page":1}}',
+			'data: {"type":"tool_result","name":"read_page","text":"Page content here","preview":"Page content here"}',
+			'data: {"type":"delta","text":"The page says..."}',
+			'data: {"type":"done"}'
+		]);
+
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			body: stream
+		}));
+
+		const results: Array<{ name: string; text: string; preview: string }> = [];
+		const deltas: string[] = [];
+		const onDone = vi.fn();
+
+		await sendMessage(paperId, chatId, 'Read page 1',
+			(t) => deltas.push(t), onDone, vi.fn(), undefined,
+			vi.fn(),
+			(result) => results.push(result));
+
+		expect(results).toHaveLength(1);
+		expect(results[0].name).toBe('read_page');
+		expect(results[0].text).toBe('Page content here');
+		expect(results[0].preview).toBe('Page content here');
+		expect(deltas).toEqual(['The page says...']);
+		expect(onDone).toHaveBeenCalledOnce();
+	});
+
 	it('handles chunked SSE data across multiple reads', async () => {
 		const encoder = new TextEncoder();
 		const stream = new ReadableStream<Uint8Array>({

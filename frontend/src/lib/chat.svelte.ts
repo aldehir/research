@@ -5,16 +5,21 @@ import {
 	deleteChatSession,
 	sendMessage
 } from '$lib/api';
-import type { ChatSession, Message, MessageContext, ToolCall } from '$lib/api';
+import type { ChatSession, Message, MessageContext, ToolCall, ToolResult } from '$lib/api';
 import { generateId } from '$lib/uuid';
 import { requestGoToPage } from '$lib/pdf-navigate.svelte';
+
+export type StreamSegment =
+	| { type: 'text'; content: string }
+	| { type: 'tool'; name: string; args: Record<string, unknown>; result?: ToolResult };
 
 let sessions = $state<ChatSession[]>([]);
 let activeSessionId = $state<string | null>(null);
 let messages = $state<Message[]>([]);
 let streamingContent = $state('');
+let streamSegments = $state<StreamSegment[]>([]);
+let messageSegments = $state(new Map<string, StreamSegment[]>());
 let isStreaming = $state(false);
-let activeToolCall = $state<ToolCall | null>(null);
 let toolCallHandler = $state<((tool: ToolCall) => void) | null>(null);
 
 export async function loadSessions(paperId: string): Promise<void> {
@@ -47,6 +52,16 @@ export async function deleteSession(paperId: string, chatId: string): Promise<vo
 	}
 }
 
+function appendTextSegment(text: string): void {
+	const last = streamSegments[streamSegments.length - 1];
+	if (last?.type === 'text') {
+		last.content += text;
+		streamSegments = [...streamSegments];
+	} else {
+		streamSegments = [...streamSegments, { type: 'text', content: text }];
+	}
+}
+
 export async function sendChatMessage(
 	paperId: string,
 	chatId: string,
@@ -63,6 +78,7 @@ export async function sendChatMessage(
 	messages = [...messages, userMessage];
 	isStreaming = true;
 	streamingContent = '';
+	streamSegments = [];
 
 	await sendMessage(
 		paperId,
@@ -70,6 +86,7 @@ export async function sendChatMessage(
 		content,
 		(text: string) => {
 			streamingContent += text;
+			appendTextSegment(text);
 		},
 		() => {
 			const assistantMessage: Message = {
@@ -79,25 +96,44 @@ export async function sendChatMessage(
 				content: streamingContent,
 				created_at: new Date().toISOString()
 			};
+			const hasToolSegments = streamSegments.some(s => s.type === 'tool');
+			if (hasToolSegments) {
+				messageSegments = new Map(messageSegments).set(assistantMessage.id, [...streamSegments]);
+			}
 			messages = [...messages, assistantMessage];
 			streamingContent = '';
+			streamSegments = [];
 			isStreaming = false;
-			activeToolCall = null;
 		},
 		(error: string) => {
 			console.error('Chat error:', error);
 			streamingContent = '';
+			streamSegments = [];
 			isStreaming = false;
-			activeToolCall = null;
 		},
 		context,
 		(tool: ToolCall) => {
-			activeToolCall = tool;
+			streamSegments = [...streamSegments, {
+				type: 'tool',
+				name: tool.name,
+				args: tool.args
+			}];
 			if (tool.name === 'go_to_page' && typeof tool.args.page === 'number') {
 				requestGoToPage(tool.args.page);
 			}
 			if (toolCallHandler) {
 				toolCallHandler(tool);
+			}
+		},
+		(result: ToolResult) => {
+			// Find the last tool segment matching this result's name and attach the result
+			for (let i = streamSegments.length - 1; i >= 0; i--) {
+				const seg = streamSegments[i];
+				if (seg.type === 'tool' && seg.name === result.name && !seg.result) {
+					seg.result = result;
+					streamSegments = [...streamSegments];
+					break;
+				}
 			}
 		}
 	);
@@ -108,6 +144,8 @@ export function resetChat(): void {
 	activeSessionId = null;
 	messages = [];
 	streamingContent = '';
+	streamSegments = [];
+	messageSegments = new Map();
 	isStreaming = false;
 }
 
@@ -131,8 +169,12 @@ export function getIsStreaming(): boolean {
 	return isStreaming;
 }
 
-export function getActiveToolCall(): ToolCall | null {
-	return activeToolCall;
+export function getStreamSegments(): StreamSegment[] {
+	return streamSegments;
+}
+
+export function getMessageSegments(messageId: string): StreamSegment[] | undefined {
+	return messageSegments.get(messageId);
 }
 
 export function setToolCallHandler(handler: ((tool: ToolCall) => void) | null): void {

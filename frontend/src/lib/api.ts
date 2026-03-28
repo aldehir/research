@@ -112,6 +112,12 @@ export interface ToolCall {
 	args: Record<string, unknown>;
 }
 
+export interface ToolResult {
+	name: string;
+	text: string;
+	preview: string;
+}
+
 export async function sendMessage(
 	paperId: string,
 	chatId: string,
@@ -120,7 +126,8 @@ export async function sendMessage(
 	onDone: () => void,
 	onError: (error: string) => void,
 	context?: MessageContext,
-	onToolCall?: (tool: ToolCall) => void
+	onToolCall?: (tool: ToolCall) => void,
+	onToolResult?: (result: ToolResult) => void
 ): Promise<void> {
 	const reqBody: Record<string, string | number> = { content };
 	if (context?.selectedText) {
@@ -167,11 +174,13 @@ export async function sendMessage(
 			for (const line of lines) {
 				if (!line.startsWith('data: ')) continue;
 				const json = line.slice(6);
-				const event = JSON.parse(json) as { type: string; text?: string; name?: string; args?: Record<string, unknown> };
+				const event = JSON.parse(json) as { type: string; text?: string; name?: string; args?: Record<string, unknown>; preview?: string };
 				if (event.type === 'delta' && event.text) {
 					onDelta(event.text);
 				} else if (event.type === 'tool_call' && onToolCall && event.name) {
 					onToolCall({ name: event.name, args: event.args ?? {} });
+				} else if (event.type === 'tool_result' && onToolResult && event.name) {
+					onToolResult({ name: event.name, text: event.text ?? '', preview: event.preview ?? '' });
 				} else if (event.type === 'done') {
 					onDone();
 					return;
