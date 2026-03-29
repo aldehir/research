@@ -56,3 +56,4 @@
 - [x] 52 — Fix chat message cross-contamination when switching sessions `COMPLETE`
 - [x] 53 — Persist tool interactions in conversation history `COMPLETE`
 - [x] 54 — Allow overwriting the Anthropic API URL `COMPLETE`
+- [ ] 55 — Decouple chat API from Anthropic types with intermediate representation `TODO`
