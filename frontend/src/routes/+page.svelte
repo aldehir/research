@@ -298,7 +298,7 @@
 	}
 
 	.theme-toggle:hover {
-		background: rgba(255, 255, 255, 0.1);
+		background: var(--color-header-hover);
 	}
 
 	.app-layout {
@@ -417,7 +417,7 @@
 	}
 
 	.mobile-toggle:hover {
-		background: rgba(255, 255, 255, 0.1);
+		background: var(--color-header-hover);
 		border-radius: var(--radius);
 	}
 

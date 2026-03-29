@@ -161,7 +161,7 @@
 	}
 
 	.toc-title:hover {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--color-toc-hover);
 		color: var(--color-toc-heading);
 	}
 
