@@ -58,7 +58,7 @@
 	.input-row {
 		display: flex;
 		gap: 0.5rem;
-		align-items: center;
+		align-items: stretch;
 	}
 
 	textarea {
@@ -88,7 +88,6 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		height: var(--btn-height-lg);
 		padding: 0 0.75rem;
 		border: none;
 		background: var(--color-primary);
