@@ -24,6 +24,7 @@ import { getChatSession, sendMessage } from '$lib/api';
 import {
 	sendChatMessage,
 	selectSession,
+	createSession,
 	getMessages,
 	getIsStreaming,
 	getStreamingContent,
@@ -125,6 +126,36 @@ describe('switching chat during streaming', () => {
 
 		// Streaming state should remain cleared
 		expect(getIsStreaming()).toBe(false);
+	});
+
+	it('creating new chat during streaming aborts stream and clears state', async () => {
+		let capturedSignal: AbortSignal | undefined;
+
+		vi.mocked(sendMessage).mockImplementation(
+			async (_p, _c, _content, onDelta, _onDone, _onError, _ctx, _onTool, _onResult, _att, signal) => {
+				capturedSignal = signal;
+				onDelta('Hello from A');
+				await new Promise<void>(() => {});
+			}
+		);
+
+		// Send a message in an existing chat, then create a new chat while streaming
+		sendChatMessage(paperId, chatA, 'Hello');
+
+		// Verify streaming is active
+		expect(getIsStreaming()).toBe(true);
+		expect(getStreamingContent()).toBe('Hello from A');
+
+		// Create a new chat — should abort the stream
+		await createSession(paperId);
+
+		expect(getIsStreaming()).toBe(false);
+		expect(getStreamingContent()).toBe('');
+		expect(getStreamSegments()).toEqual([]);
+		expect(capturedSignal?.aborted).toBe(true);
+
+		// New chat should have no messages
+		expect(getMessages()).toEqual([]);
 	});
 
 	it('deltas after session switch do not pollute new session', async () => {

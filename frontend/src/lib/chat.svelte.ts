@@ -37,7 +37,19 @@ function isDraft(id: string): boolean {
 	return id.startsWith('draft-');
 }
 
+function abortActiveStream(): void {
+	if (activeStreamAbort) {
+		activeStreamAbort.abort();
+		activeStreamAbort = null;
+		activeStreamChatId = null;
+		streamingContent = '';
+		streamSegments = [];
+		isStreaming = false;
+	}
+}
+
 export async function createSession(paperId: string): Promise<void> {
+	abortActiveStream();
 	const existingDraft = sessions.find(s => isDraft(s.id));
 	if (existingDraft) {
 		activeSessionId = existingDraft.id;
@@ -56,14 +68,7 @@ export async function createSession(paperId: string): Promise<void> {
 }
 
 export async function selectSession(paperId: string, chatId: string): Promise<void> {
-	if (activeStreamAbort) {
-		activeStreamAbort.abort();
-		activeStreamAbort = null;
-		activeStreamChatId = null;
-		streamingContent = '';
-		streamSegments = [];
-		isStreaming = false;
-	}
+	abortActiveStream();
 	sessions = sessions.filter(s => !isDraft(s.id));
 	activeSessionId = chatId;
 	const session = await getChatSession(paperId, chatId);
@@ -205,11 +210,7 @@ export async function sendChatMessage(
 }
 
 export function resetChat(): void {
-	if (activeStreamAbort) {
-		activeStreamAbort.abort();
-		activeStreamAbort = null;
-		activeStreamChatId = null;
-	}
+	abortActiveStream();
 	sessions = [];
 	activeSessionId = null;
 	messages = [];
