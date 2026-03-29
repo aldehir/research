@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -12,38 +13,56 @@ import (
 	"github.com/aldehir/research/internal/api"
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
+	"github.com/spf13/cobra"
 )
 
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "research-server",
+		Short: "Research paper reader server",
+		RunE:  runServe,
+	}
+
+	f := cmd.Flags()
+	f.String("addr", envOrDefault("ADDR", ":8080"), "listen address")
+	f.String("db-path", envOrDefault("DB_PATH", "research.db"), "SQLite database path")
+	f.String("pdf-dir", envOrDefault("PDF_DIR", "./data/pdfs"), "PDF storage directory")
+	f.String("log-level", envOrDefault("LOG_LEVEL", "info"), "log level (debug, info, warn, error)")
+	f.String("frontend-dir", envOrDefault("FRONTEND_DIR", ""), "serve frontend from this directory instead of embedded build")
+
+	return cmd
+}
+
 func main() {
-	addr := ":8080"
-	if v := os.Getenv("ADDR"); v != "" {
-		addr = v
+	if err := newRootCmd().Execute(); err != nil {
+		os.Exit(1)
 	}
+}
 
-	dbPath := "research.db"
-	if v := os.Getenv("DB_PATH"); v != "" {
-		dbPath = v
-	}
-
-	pdfDir := "./data/pdfs"
-	if v := os.Getenv("PDF_DIR"); v != "" {
-		pdfDir = v
-	}
+func runServe(cmd *cobra.Command, args []string) error {
+	addr, _ := cmd.Flags().GetString("addr")
+	dbPath, _ := cmd.Flags().GetString("db-path")
+	pdfDir, _ := cmd.Flags().GetString("pdf-dir")
+	logLevelStr, _ := cmd.Flags().GetString("log-level")
+	frontendDir, _ := cmd.Flags().GetString("frontend-dir")
 
 	logLevel := new(slog.LevelVar)
-	if v := os.Getenv("LOG_LEVEL"); v != "" {
-		if err := logLevel.UnmarshalText([]byte(v)); err != nil {
-			slog.Error("invalid LOG_LEVEL", "value", v, "error", err)
-			os.Exit(1)
-		}
+	if err := logLevel.UnmarshalText([]byte(logLevelStr)); err != nil {
+		return fmt.Errorf("invalid log level %q: %w", logLevelStr, err)
 	}
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})
 	logger := slog.New(handler)
 
 	db, err := store.Open(dbPath, logger)
 	if err != nil {
-		logger.Error("open database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
 
@@ -61,26 +80,21 @@ func main() {
 	}
 	storage := pdf.NewStorage(pdfDir)
 
-	// Start background PDF text indexer
 	indexer := pdf.NewIndexer(db, logger)
 	go runIndexer(indexer, storage, logger)
 
 	mux := api.NewMux(db, storage, chat, logger)
 
-	frontendFS := resolveFrontendFS(logger)
+	frontendFS := resolveFrontendFS(frontendDir, logger)
 	if frontendFS != nil {
 		serveFrontend(mux, frontendFS)
 	}
 
 	logger.Info("server starting", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		logger.Error("server error", "error", err)
-		os.Exit(1)
-	}
+	return http.ListenAndServe(addr, mux)
 }
 
 func runIndexer(indexer *pdf.Indexer, storage *pdf.Storage, logger *slog.Logger) {
-	// Run once immediately on startup
 	if err := indexer.IndexUnindexed(storage.Path); err != nil {
 		logger.Warn("indexer run failed", "error", err)
 	}
@@ -94,11 +108,11 @@ func runIndexer(indexer *pdf.Indexer, storage *pdf.Storage, logger *slog.Logger)
 	}
 }
 
-func resolveFrontendFS(logger *slog.Logger) fs.FS {
-	if dir := os.Getenv("FRONTEND_DIR"); dir != "" {
+func resolveFrontendFS(dir string, logger *slog.Logger) fs.FS {
+	if dir != "" {
 		info, err := os.Stat(dir)
 		if err != nil || !info.IsDir() {
-			logger.Error("FRONTEND_DIR is not a valid directory", "dir", dir, "error", err)
+			logger.Error("frontend-dir is not a valid directory", "dir", dir, "error", err)
 			os.Exit(1)
 		}
 		logger.Info("serving frontend from directory", "dir", dir)
@@ -111,7 +125,6 @@ func resolveFrontendFS(logger *slog.Logger) fs.FS {
 		return nil
 	}
 
-	// Verify the embedded FS has content
 	if _, err := fs.Stat(sub, "index.html"); err != nil {
 		logger.Info("embedded frontend build has no index.html, skipping static file serving")
 		return nil
@@ -125,21 +138,18 @@ func serveFrontend(mux *http.ServeMux, frontendFS fs.FS) {
 	fileServer := http.FileServerFS(frontendFS)
 
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		// Try to serve the exact file first
 		path := r.URL.Path
 		if path == "/" {
 			path = "index.html"
 		} else {
-			path = path[1:] // strip leading slash
+			path = path[1:]
 		}
 
-		// Check if file exists
 		if _, err := fs.Stat(frontendFS, path); err == nil {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
-		// SPA fallback: serve index.html for any unmatched route
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
 	})

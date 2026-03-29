@@ -32,4 +32,4 @@
 - [ ] 28 — Dark mode PDF color inversion `COMPLETE`
 - [x] 29 — Embed frontend build in Go binary `COMPLETE`
 - [x] 30 — Convert CSS colors to OKLCH `COMPLETE`
-- [ ] 31 — Add CLI parsing with cobra, rename binary to research-server `IN PROGRESS`
+- [x] 31 — Add CLI parsing with cobra, rename binary to research-server `COMPLETE`

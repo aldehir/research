@@ -5,7 +5,7 @@ PDF reader web app with LLM chat. Go backend, SvelteKit 5 SPA frontend.
 ## Project Structure
 
 ```
-cmd/server/         — Go entrypoint
+cmd/research-server/ — Go entrypoint (cobra CLI)
 internal/
   api/              — HTTP handlers (net/http ServeMux)
   store/            — SQLite data access
@@ -22,7 +22,7 @@ frontend/           — SvelteKit 5 app (adapter-static, SPA mode)
 - **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO)
 - **Tests**: `go test ./...` — table-driven tests with `stretchr/testify` assert/require
 - **Dependencies**: Prefer stdlib. Only add third-party deps when no stdlib equivalent exists.
-- **Run**: `go run ./cmd/server`
+- **Run**: `go run ./cmd/research-server`
 
 ## Frontend (SvelteKit 5)
 
