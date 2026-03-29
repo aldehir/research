@@ -80,9 +80,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 		if model := os.Getenv("ANTHROPIC_MODEL"); model != "" {
 			opts = append(opts, anthropic.WithModel(model))
 		}
+		if baseURL := os.Getenv("ANTHROPIC_BASE_URL"); baseURL != "" {
+			opts = append(opts, anthropic.WithBaseURL(baseURL))
+		}
 		client := anthropic.NewClient(apiKey, opts...)
 		chat = client
-		logger.Info("Anthropic API client initialized", "model", client.Model)
+		logger.Info("Anthropic API client initialized", "model", client.Model, "base_url", client.BaseURL)
 	} else {
 		logger.Warn("ANTHROPIC_API_KEY not set, chat features will be unavailable")
 	}

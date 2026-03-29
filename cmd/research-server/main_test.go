@@ -72,6 +72,7 @@ func TestNewRootCmd_NoAnthropicFlags(t *testing.T) {
 
 	assert.Nil(t, cmd.Flag("anthropic-api-key"), "ANTHROPIC_API_KEY should not be a flag")
 	assert.Nil(t, cmd.Flag("anthropic-model"), "ANTHROPIC_MODEL should not be a flag")
+	assert.Nil(t, cmd.Flag("anthropic-base-url"), "ANTHROPIC_BASE_URL should not be a flag")
 }
 
 func testFS() fstest.MapFS {

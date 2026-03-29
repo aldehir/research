@@ -193,6 +193,14 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 
 type Option func(*Client)
 
+func WithBaseURL(url string) Option {
+	return func(c *Client) {
+		if url != "" {
+			c.BaseURL = strings.TrimRight(url, "/")
+		}
+	}
+}
+
 func WithModel(model string) Option {
 	return func(c *Client) {
 		if model != "" {

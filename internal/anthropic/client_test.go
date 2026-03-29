@@ -32,6 +32,21 @@ func TestNewClient_WithModel_Empty_UsesDefault(t *testing.T) {
 	assert.Equal(t, "claude-sonnet-4-20250514", c.Model)
 }
 
+func TestNewClient_WithBaseURL(t *testing.T) {
+	c := NewClient("test-key", WithBaseURL("http://localhost:8080"))
+	assert.Equal(t, "http://localhost:8080", c.BaseURL)
+}
+
+func TestNewClient_WithBaseURL_Empty_UsesDefault(t *testing.T) {
+	c := NewClient("test-key", WithBaseURL(""))
+	assert.Equal(t, "https://api.anthropic.com", c.BaseURL)
+}
+
+func TestNewClient_WithBaseURL_StripsTrailingSlash(t *testing.T) {
+	c := NewClient("test-key", WithBaseURL("http://localhost:8080/"))
+	assert.Equal(t, "http://localhost:8080", c.BaseURL)
+}
+
 func TestStream_ReceivesTextDeltas(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "POST", r.Method)

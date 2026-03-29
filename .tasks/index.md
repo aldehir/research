@@ -55,3 +55,4 @@
 - [x] 51 — Persist chat images to disk and recall on conversation load `COMPLETE`
 - [x] 52 — Fix chat message cross-contamination when switching sessions `COMPLETE`
 - [x] 53 — Persist tool interactions in conversation history `COMPLETE`
+- [x] 54 — Allow overwriting the Anthropic API URL `COMPLETE`
