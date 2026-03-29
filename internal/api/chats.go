@@ -129,10 +129,17 @@ func handleGetChatSession(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 			})
 		}
 
-		// Build enriched messages
-		msgs := make([]messageWithAttachments, len(result.Messages))
-		for i, m := range result.Messages {
-			msgs[i] = messageWithAttachments{Message: m, Attachments: attsByMsg[m.ID]}
+		// Build enriched messages, filtering out tool interaction messages
+		// (those have content_blocks but no user-visible content)
+		var msgs []messageWithAttachments
+		for _, m := range result.Messages {
+			if m.ContentBlocks != nil {
+				continue
+			}
+			msgs = append(msgs, messageWithAttachments{Message: m, Attachments: attsByMsg[m.ID]})
+		}
+		if msgs == nil {
+			msgs = []messageWithAttachments{}
 		}
 
 		resp := struct {
