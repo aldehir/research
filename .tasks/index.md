@@ -37,4 +37,4 @@
 - [x] 33 — Remove system theme selection `COMPLETE`
 - [x] 34 — Resizable ToC panel `COMPLETE`
 - [x] 35 — Hideable sidebar panel in desktop view `COMPLETE`
-- [ ] 36 — Mobile panel layout tweaks `TODO`
+- [x] 36 — Mobile panel layout tweaks `COMPLETE`

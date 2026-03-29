@@ -490,12 +490,17 @@
 	.sidebar.mobile-overlay {
 		width: 280px;
 		min-width: 0;
+		border-radius: 0;
 		box-shadow: 2px 0 12px var(--color-shadow);
+	}
+
+	.sidebar.mobile-overlay .drop-overlay {
+		border-radius: 0;
 	}
 
 	/* Mobile chat overlay */
 	.chat-overlay-wrapper {
-		width: 70vw;
+		width: 75vw;
 		max-width: 400px;
 		min-width: 280px;
 		display: flex;
