@@ -18,9 +18,36 @@ describe('overscroll-behavior CSS', () => {
 	});
 });
 
-describe('viewport meta', () => {
+describe('viewport and PWA meta', () => {
 	it('includes viewport-fit=cover for safe area support', () => {
 		expect(html).toContain('viewport-fit=cover');
+	});
+
+	it('includes maximum-scale=1 to prevent native page zoom', () => {
+		expect(html).toContain('maximum-scale=1');
+	});
+
+	it('includes apple-mobile-web-app-capable meta', () => {
+		expect(html).toContain('apple-mobile-web-app-capable');
+	});
+
+	it('links to manifest.json', () => {
+		expect(html).toContain('rel="manifest"');
+		expect(html).toContain('manifest.json');
+	});
+});
+
+describe('manifest.json', () => {
+	const manifest = JSON.parse(
+		readFileSync(resolve(__dirname, '../static/manifest.json'), 'utf-8')
+	);
+
+	it('sets display to standalone', () => {
+		expect(manifest.display).toBe('standalone');
+	});
+
+	it('has a start_url', () => {
+		expect(manifest.start_url).toBe('/');
 	});
 });
 
