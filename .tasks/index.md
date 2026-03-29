@@ -26,3 +26,4 @@
 - [ ] 22 — Overlay delete icon in paper side menu `TODO`
 - [ ] 23 — Add resize handles to side panels in desktop view `TODO`
 - [x] 24 — Reduce ctrl+scroll zoom sensitivity `COMPLETE`
+- [x] 25 — Clean up frontend visual/UI tests `COMPLETE`

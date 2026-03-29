@@ -34,20 +34,6 @@ describe('theme store', () => {
 			expect(localStorage.getItem('theme')).toBe('dark');
 			expect(getTheme()).toBe('dark');
 		});
-
-		it('sets data-theme attribute on html element', () => {
-			initTheme();
-			setTheme('light');
-			expect(document.documentElement.getAttribute('data-theme')).toBe('light');
-		});
-
-		it('removes data-theme attribute when set to system', () => {
-			initTheme();
-			setTheme('dark');
-			expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-			setTheme('system');
-			expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
-		});
 	});
 
 	describe('initTheme', () => {
