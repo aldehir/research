@@ -12,6 +12,7 @@ import (
 	"github.com/aldehir/research/frontend"
 	"github.com/aldehir/research/internal/anthropic"
 	"github.com/aldehir/research/internal/api"
+	"github.com/aldehir/research/internal/chat"
 	luaeval "github.com/aldehir/research/internal/lua"
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
@@ -74,7 +75,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	var chat api.ChatStreamer
+	var provider chat.Provider
 	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
 		var opts []anthropic.Option
 		if model := os.Getenv("ANTHROPIC_MODEL"); model != "" {
@@ -84,7 +85,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			opts = append(opts, anthropic.WithBaseURL(baseURL))
 		}
 		client := anthropic.NewClient(apiKey, opts...)
-		chat = client
+		provider = anthropic.NewAdapter(client)
 		logger.Info("Anthropic API client initialized", "model", client.Model, "base_url", client.BaseURL)
 	} else {
 		logger.Warn("ANTHROPIC_API_KEY not set, chat features will be unavailable")
@@ -95,7 +96,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	go runIndexer(indexer, storage, logger)
 
 	luaEval := luaeval.NewEvaluator(5 * time.Second)
-	mux := api.NewMux(db, storage, chat, luaEval, logger, api.WithDataDir(dataDir))
+	mux := api.NewMux(db, storage, provider, luaEval, logger, api.WithDataDir(dataDir))
 
 	frontendFS := resolveFrontendFS(frontendDir, logger)
 	if frontendFS != nil {

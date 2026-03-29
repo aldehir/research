@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aldehir/research/internal/anthropic"
+	"github.com/aldehir/research/internal/chat"
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
 	gopdf "github.com/go-pdf/fpdf"
@@ -22,15 +22,15 @@ import (
 )
 
 type mockStreamer struct {
-	events []anthropic.StreamEvent
+	events []chat.StreamEvent
 	err    error
 }
 
-func (m *mockStreamer) Stream(_ context.Context, _ anthropic.Request) (<-chan anthropic.StreamEvent, error) {
+func (m *mockStreamer) Stream(_ context.Context, _ chat.Request) (<-chan chat.StreamEvent, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
-	ch := make(chan anthropic.StreamEvent)
+	ch := make(chan chat.StreamEvent)
 	go func() {
 		defer close(ch)
 		for _, ev := range m.events {
@@ -43,10 +43,10 @@ func (m *mockStreamer) Stream(_ context.Context, _ anthropic.Request) (<-chan an
 // captureStreamer records the request passed to Stream.
 type captureStreamer struct {
 	mockStreamer
-	captured *anthropic.Request
+	captured *chat.Request
 }
 
-func (c *captureStreamer) Stream(ctx context.Context, req anthropic.Request) (<-chan anthropic.StreamEvent, error) {
+func (c *captureStreamer) Stream(ctx context.Context, req chat.Request) (<-chan chat.StreamEvent, error) {
 	c.captured = &req
 	return c.mockStreamer.Stream(ctx, req)
 }
@@ -54,12 +54,12 @@ func (c *captureStreamer) Stream(ctx context.Context, req anthropic.Request) (<-
 // multiTurnStreamer simulates a tool call loop: first call returns tool_use,
 // subsequent calls return the corresponding events from the sequence.
 type multiTurnStreamer struct {
-	calls    [][]anthropic.StreamEvent
+	calls    [][]chat.StreamEvent
 	callIdx  int
-	requests []anthropic.Request
+	requests []chat.Request
 }
 
-func (m *multiTurnStreamer) Stream(_ context.Context, req anthropic.Request) (<-chan anthropic.StreamEvent, error) {
+func (m *multiTurnStreamer) Stream(_ context.Context, req chat.Request) (<-chan chat.StreamEvent, error) {
 	m.requests = append(m.requests, req)
 	idx := m.callIdx
 	if idx >= len(m.calls) {
@@ -67,7 +67,7 @@ func (m *multiTurnStreamer) Stream(_ context.Context, req anthropic.Request) (<-
 	}
 	m.callIdx++
 	events := m.calls[idx]
-	ch := make(chan anthropic.StreamEvent)
+	ch := make(chan chat.StreamEvent)
 	go func() {
 		defer close(ch)
 		for _, ev := range events {
@@ -122,10 +122,10 @@ func TestSendMessage(t *testing.T) {
 		seedChatSession(t, tdb)
 
 		mock := &mockStreamer{
-			events: []anthropic.StreamEvent{
-				{Type: "content_block_delta", Text: "Hello"},
-				{Type: "content_block_delta", Text: " world"},
-				{Type: "message_stop"},
+			events: []chat.StreamEvent{
+				{Kind: chat.EventDelta, Text:"Hello"},
+				{Kind: chat.EventDelta, Text:" world"},
+				{Kind: chat.EventDone},
 			},
 		}
 		mux := testMuxWithChat(t, tdb, mock)
@@ -155,9 +155,9 @@ func TestSendMessage(t *testing.T) {
 		seedChatSession(t, tdb)
 
 		mock := &mockStreamer{
-			events: []anthropic.StreamEvent{
-				{Type: "content_block_delta", Text: "Reply"},
-				{Type: "message_stop"},
+			events: []chat.StreamEvent{
+				{Kind: chat.EventDelta, Text:"Reply"},
+				{Kind: chat.EventDone},
 			},
 		}
 		mux := testMuxWithChat(t, tdb, mock)
@@ -182,10 +182,10 @@ func TestSendMessage(t *testing.T) {
 		seedChatSession(t, tdb)
 
 		mock := &mockStreamer{
-			events: []anthropic.StreamEvent{
-				{Type: "content_block_delta", Text: "Hello"},
-				{Type: "content_block_delta", Text: " world"},
-				{Type: "message_stop"},
+			events: []chat.StreamEvent{
+				{Kind: chat.EventDelta, Text:"Hello"},
+				{Kind: chat.EventDelta, Text:" world"},
+				{Kind: chat.EventDone},
 			},
 		}
 		mux := testMuxWithChat(t, tdb, mock)
@@ -238,7 +238,7 @@ func TestSendMessage(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
-	t.Run("anthropic stream error returns error SSE event", func(t *testing.T) {
+	t.Run("stream error returns error SSE event", func(t *testing.T) {
 		tdb := store.NewTestDB(t)
 		seedChatSession(t, tdb)
 
@@ -283,9 +283,9 @@ func TestSendMessage(t *testing.T) {
 
 		mock := &captureStreamer{
 			mockStreamer: mockStreamer{
-				events: []anthropic.StreamEvent{
-					{Type: "content_block_delta", Text: "Ok"},
-					{Type: "message_stop"},
+				events: []chat.StreamEvent{
+					{Kind: chat.EventDelta, Text:"Ok"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -302,8 +302,9 @@ func TestSendMessage(t *testing.T) {
 
 		// The last user message should contain viewer context
 		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
-		assert.Contains(t, lastMsg.Content, "What is this?")
-		assert.Contains(t, lastMsg.Content, "Current page: 5")
+		require.NotEmpty(t, lastMsg.Parts)
+		assert.Contains(t, lastMsg.Parts[0].Text, "What is this?")
+		assert.Contains(t, lastMsg.Parts[0].Text, "Current page: 5")
 	})
 
 	t.Run("no viewer context appended when no page info", func(t *testing.T) {
@@ -312,9 +313,9 @@ func TestSendMessage(t *testing.T) {
 
 		mock := &captureStreamer{
 			mockStreamer: mockStreamer{
-				events: []anthropic.StreamEvent{
-					{Type: "content_block_delta", Text: "Ok"},
-					{Type: "message_stop"},
+				events: []chat.StreamEvent{
+					{Kind: chat.EventDelta, Text:"Ok"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -330,7 +331,8 @@ func TestSendMessage(t *testing.T) {
 		require.NotNil(t, mock.captured)
 
 		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
-		assert.Equal(t, "Hello", lastMsg.Content)
+		require.NotEmpty(t, lastMsg.Parts)
+		assert.Equal(t, "Hello", lastMsg.Parts[0].Text)
 	})
 
 	t.Run("populates document metadata from paper record", func(t *testing.T) {
@@ -360,9 +362,9 @@ func TestSendMessage(t *testing.T) {
 
 		mock := &captureStreamer{
 			mockStreamer: mockStreamer{
-				events: []anthropic.StreamEvent{
-					{Type: "content_block_delta", Text: "Ok"},
-					{Type: "message_stop"},
+				events: []chat.StreamEvent{
+					{Kind: chat.EventDelta, Text:"Ok"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -376,9 +378,9 @@ func TestSendMessage(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		require.NotNil(t, mock.captured)
-		assert.Equal(t, "Relativity", mock.captured.DocumentTitle)
-		assert.Equal(t, "Einstein", mock.captured.DocumentAuthor)
-		assert.Equal(t, 20, mock.captured.TotalPages)
+		assert.Contains(t, mock.captured.SystemPrompt, "Relativity")
+		assert.Contains(t, mock.captured.SystemPrompt, "Einstein")
+		assert.Contains(t, mock.captured.SystemPrompt, "20 pages")
 	})
 
 }
@@ -412,16 +414,16 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				// First call: model wants to search
 				{
-					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "search_pdf", ToolInput: `{"query":"attention"}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "search_pdf", Input: json.RawMessage(`{"query":"attention"}`)}},
+					{Kind: chat.EventDone},
 				},
 				// Second call (after tool result): model gives final answer
 				{
-					{Type: "content_block_delta", Text: "I found attention on page 1"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"I found attention on page 1"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -459,8 +461,8 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 		require.Len(t, mock.requests, 2)
 		secondReq := mock.requests[1]
 		lastMsg := secondReq.Messages[len(secondReq.Messages)-1]
-		require.NotEmpty(t, lastMsg.ContentBlocks)
-		assert.Equal(t, "tool_result", lastMsg.ContentBlocks[0].Type)
+		require.NotEmpty(t, lastMsg.Parts)
+		assert.Equal(t, chat.PartToolResult, lastMsg.Parts[0].Kind)
 	})
 
 	t.Run("executes read_page tool", func(t *testing.T) {
@@ -490,14 +492,14 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_2", ToolName: "read_page", ToolInput: `{"page":1}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_2", Name: "read_page", Input: json.RawMessage(`{"page":1}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "The page says..."},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"The page says..."},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -516,9 +518,10 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 		require.Len(t, mock.requests, 2)
 		secondReq := mock.requests[1]
 		lastMsg := secondReq.Messages[len(secondReq.Messages)-1]
-		require.NotEmpty(t, lastMsg.ContentBlocks)
-		assert.Equal(t, "tool_result", lastMsg.ContentBlocks[0].Type)
-		assert.Contains(t, lastMsg.ContentBlocks[0].Content, "Page one content")
+		require.NotEmpty(t, lastMsg.Parts)
+		assert.Equal(t, chat.PartToolResult, lastMsg.Parts[0].Kind)
+		require.NotNil(t, lastMsg.Parts[0].ToolResult)
+		assert.Contains(t, lastMsg.Parts[0].ToolResult.Content, "Page one content")
 	})
 
 	t.Run("go_to_page emits client-side SSE event", func(t *testing.T) {
@@ -543,14 +546,14 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_3", ToolName: "go_to_page", ToolInput: `{"page":5}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_3", Name: "go_to_page", Input: json.RawMessage(`{"page":5}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "Navigated to page 5"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"Navigated to page 5"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -600,14 +603,14 @@ func TestSendMessage_ToolResultSSE(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":3}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "Done"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"Done"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -664,14 +667,14 @@ func TestSendMessage_ToolResultSSE(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_2", ToolName: "read_page", ToolInput: `{"page":1}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_2", Name: "read_page", Input: json.RawMessage(`{"page":1}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "The page says..."},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"The page says..."},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -727,15 +730,15 @@ func TestSendMessage_ToolResultSSE(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":1}`},
-					{Type: "tool_use", ToolUseID: "toolu_2", ToolName: "read_page", ToolInput: `{"page":1}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":1}`)}},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_2", Name: "read_page", Input: json.RawMessage(`{"page":1}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "Here it is"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"Here it is"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -786,14 +789,14 @@ func TestSendMessage_LogsToolLoopIteration(t *testing.T) {
 	require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 	mock := &multiTurnStreamer{
-		calls: [][]anthropic.StreamEvent{
+		calls: [][]chat.StreamEvent{
 			{
-				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
-				{Type: "message_stop"},
+				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":3}`)}},
+				{Kind: chat.EventDone},
 			},
 			{
-				{Type: "content_block_delta", Text: "Done"},
-				{Type: "message_stop"},
+				{Kind: chat.EventDelta, Text:"Done"},
+				{Kind: chat.EventDone},
 			},
 		},
 	}
@@ -838,14 +841,14 @@ func TestSendMessage_LogsToolExecutionResults(t *testing.T) {
 	require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 	mock := &multiTurnStreamer{
-		calls: [][]anthropic.StreamEvent{
+		calls: [][]chat.StreamEvent{
 			{
-				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":2}`},
-				{Type: "message_stop"},
+				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":2}`)}},
+				{Kind: chat.EventDone},
 			},
 			{
-				{Type: "content_block_delta", Text: "Done"},
-				{Type: "message_stop"},
+				{Kind: chat.EventDelta, Text:"Done"},
+				{Kind: chat.EventDone},
 			},
 		},
 	}
@@ -890,14 +893,14 @@ func TestSendMessage_LogsFinalResponseSummary(t *testing.T) {
 	require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 	mock := &multiTurnStreamer{
-		calls: [][]anthropic.StreamEvent{
+		calls: [][]chat.StreamEvent{
 			{
-				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":1}`},
-				{Type: "message_stop"},
+				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":1}`)}},
+				{Kind: chat.EventDone},
 			},
 			{
-				{Type: "content_block_delta", Text: "Here is page 1"},
-				{Type: "message_stop"},
+				{Kind: chat.EventDelta, Text:"Here is page 1"},
+				{Kind: chat.EventDone},
 			},
 		},
 	}
@@ -950,14 +953,14 @@ func TestSendMessage_SnapshotPage(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_snap", ToolName: "snapshot_page", ToolInput: `{"page":1}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_snap", Name: "snapshot_page", Input: json.RawMessage(`{"page":1}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "I can see the chart"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"I can see the chart"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -992,18 +995,17 @@ func TestSendMessage_SnapshotPage(t *testing.T) {
 		assert.True(t, hasToolResult, "should emit tool_result event")
 		assert.True(t, hasDone, "should emit done event")
 
-		// Verify the tool result sent to Anthropic has image content parts
+		// Verify the tool result sent to provider has image content
 		require.Len(t, mock.requests, 2)
 		secondReq := mock.requests[1]
 		lastMsg := secondReq.Messages[len(secondReq.Messages)-1]
-		require.NotEmpty(t, lastMsg.ContentBlocks)
-		toolResult := lastMsg.ContentBlocks[0]
-		assert.Equal(t, "tool_result", toolResult.Type)
-		require.NotEmpty(t, toolResult.ContentParts, "snapshot_page should return image content parts")
-		assert.Equal(t, "image", toolResult.ContentParts[0].Type)
-		require.NotNil(t, toolResult.ContentParts[0].Source)
-		assert.Equal(t, "image/png", toolResult.ContentParts[0].Source.MediaType)
-		assert.NotEmpty(t, toolResult.ContentParts[0].Source.Data)
+		require.NotEmpty(t, lastMsg.Parts)
+		toolResult := lastMsg.Parts[0]
+		assert.Equal(t, chat.PartToolResult, toolResult.Kind)
+		require.NotNil(t, toolResult.ToolResult)
+		require.NotNil(t, toolResult.ToolResult.Image, "snapshot_page should return image content")
+		assert.Equal(t, "image/png", toolResult.ToolResult.Image.MediaType)
+		assert.NotEmpty(t, toolResult.ToolResult.Image.Data)
 	})
 
 	t.Run("snapshot_page SSE result includes content_type image", func(t *testing.T) {
@@ -1033,14 +1035,14 @@ func TestSendMessage_SnapshotPage(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_snap2", ToolName: "snapshot_page", ToolInput: `{"page":1}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_snap2", Name: "snapshot_page", Input: json.RawMessage(`{"page":1}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "Done"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"Done"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -1095,14 +1097,14 @@ func TestSendMessage_ReadPageUsesIndex(t *testing.T) {
 	require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 	mock := &multiTurnStreamer{
-		calls: [][]anthropic.StreamEvent{
+		calls: [][]chat.StreamEvent{
 			{
-				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "read_page", ToolInput: `{"page":1}`},
-				{Type: "message_stop"},
+				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "read_page", Input: json.RawMessage(`{"page":1}`)}},
+				{Kind: chat.EventDone},
 			},
 			{
-				{Type: "content_block_delta", Text: "Got it"},
-				{Type: "message_stop"},
+				{Kind: chat.EventDelta, Text:"Got it"},
+				{Kind: chat.EventDone},
 			},
 		},
 	}
@@ -1120,20 +1122,22 @@ func TestSendMessage_ReadPageUsesIndex(t *testing.T) {
 	// Verify tool result contains indexed content (not pdftotext)
 	require.Len(t, mock.requests, 2)
 	lastMsg := mock.requests[1].Messages[len(mock.requests[1].Messages)-1]
-	require.NotEmpty(t, lastMsg.ContentBlocks)
-	assert.Contains(t, lastMsg.ContentBlocks[0].Content, "Indexed page content")
+	require.NotEmpty(t, lastMsg.Parts)
+	assert.Equal(t, chat.PartToolResult, lastMsg.Parts[0].Kind)
+	require.NotNil(t, lastMsg.Parts[0].ToolResult)
+	assert.Contains(t, lastMsg.Parts[0].ToolResult.Content, "Indexed page content")
 }
 
 func TestSendMessage_WithAttachments(t *testing.T) {
-	t.Run("includes image and text blocks in anthropic message", func(t *testing.T) {
+	t.Run("includes image and text parts in chat message", func(t *testing.T) {
 		tdb := store.NewTestDB(t)
 		seedChatSession(t, tdb)
 
 		mock := &captureStreamer{
 			mockStreamer: mockStreamer{
-				events: []anthropic.StreamEvent{
-					{Type: "content_block_delta", Text: "I see the figure"},
-					{Type: "message_stop"},
+				events: []chat.StreamEvent{
+					{Kind: chat.EventDelta, Text:"I see the figure"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -1148,27 +1152,27 @@ func TestSendMessage_WithAttachments(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		require.NotNil(t, mock.captured)
 
-		// The user message should have content blocks (multimodal)
+		// The user message should have parts (multimodal)
 		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
-		require.NotEmpty(t, lastMsg.ContentBlocks, "should use content blocks for multimodal message")
+		require.NotEmpty(t, lastMsg.Parts, "should use parts for multimodal message")
 
-		// Should have a text block and an image block
+		// Should have a text part and an image part
 		var hasText, hasImage bool
-		for _, block := range lastMsg.ContentBlocks {
-			if block.Type == "text" {
+		for _, part := range lastMsg.Parts {
+			if part.Kind == chat.PartText {
 				hasText = true
-				assert.Contains(t, block.Text, "What does this show?")
-				assert.Contains(t, block.Text, "Figure 1: Results")
+				assert.Contains(t, part.Text, "What does this show?")
+				assert.Contains(t, part.Text, "Figure 1: Results")
 			}
-			if block.Type == "image" {
+			if part.Kind == chat.PartImage {
 				hasImage = true
-				require.NotNil(t, block.Source)
-				assert.Equal(t, "image/png", block.Source.MediaType)
-				assert.Equal(t, "aWdub3Jl", block.Source.Data)
+				require.NotNil(t, part.Image)
+				assert.Equal(t, "image/png", part.Image.MediaType)
+				assert.Equal(t, "aWdub3Jl", part.Image.Data)
 			}
 		}
-		assert.True(t, hasText, "should have text content block")
-		assert.True(t, hasImage, "should have image content block")
+		assert.True(t, hasText, "should have text part")
+		assert.True(t, hasImage, "should have image part")
 	})
 
 	t.Run("message without attachments works as before", func(t *testing.T) {
@@ -1177,9 +1181,9 @@ func TestSendMessage_WithAttachments(t *testing.T) {
 
 		mock := &captureStreamer{
 			mockStreamer: mockStreamer{
-				events: []anthropic.StreamEvent{
-					{Type: "content_block_delta", Text: "Ok"},
-					{Type: "message_stop"},
+				events: []chat.StreamEvent{
+					{Kind: chat.EventDelta, Text:"Ok"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -1194,10 +1198,11 @@ func TestSendMessage_WithAttachments(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		require.NotNil(t, mock.captured)
 
-		// Should use plain text content, not blocks
+		// Should use a single text part
 		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
-		assert.Equal(t, "Hello", lastMsg.Content)
-		assert.Empty(t, lastMsg.ContentBlocks)
+		require.Len(t, lastMsg.Parts, 1)
+		assert.Equal(t, chat.PartText, lastMsg.Parts[0].Kind)
+		assert.Equal(t, "Hello", lastMsg.Parts[0].Text)
 	})
 }
 
@@ -1224,14 +1229,14 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 		require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":3}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "Done navigating"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"Done navigating"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -1257,10 +1262,10 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 		assert.Equal(t, "user", messages[0].Role)
 		assert.Equal(t, "Go to page 3", messages[0].Content)
 
-		// Second: assistant with tool_use content blocks
+		// Second: assistant with tool_call content blocks
 		assert.Equal(t, "assistant", messages[1].Role)
-		require.NotNil(t, messages[1].ContentBlocks, "assistant tool_use message should have content_blocks")
-		assert.Contains(t, *messages[1].ContentBlocks, "tool_use")
+		require.NotNil(t, messages[1].ContentBlocks, "assistant tool_call message should have content_blocks")
+		assert.Contains(t, *messages[1].ContentBlocks, "tool_call")
 		assert.Contains(t, *messages[1].ContentBlocks, "toolu_1")
 
 		// Third: user with tool_result content blocks
@@ -1296,14 +1301,14 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 
 		// --- Turn 1: tool call ---
 		mock1 := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":3}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "Navigated"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"Navigated"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -1320,9 +1325,9 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 		// --- Turn 2: follow-up question ---
 		mock2 := &captureStreamer{
 			mockStreamer: mockStreamer{
-				events: []anthropic.StreamEvent{
-					{Type: "content_block_delta", Text: "Yes"},
-					{Type: "message_stop"},
+				events: []chat.StreamEvent{
+					{Kind: chat.EventDelta, Text:"Yes"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -1341,19 +1346,19 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 		// Should have: user, assistant(tool_use), user(tool_result), assistant(text), user
 		require.GreaterOrEqual(t, len(msgs), 5, "history should include tool interaction messages")
 
-		// Find the assistant message with tool_use blocks
-		var hasToolUseMsg, hasToolResultMsg bool
+		// Find the assistant message with tool_call parts
+		var hasToolCallMsg, hasToolResultMsg bool
 		for _, m := range msgs {
-			for _, b := range m.ContentBlocks {
-				if b.Type == "tool_use" {
-					hasToolUseMsg = true
+			for _, p := range m.Parts {
+				if p.Kind == chat.PartToolCall {
+					hasToolCallMsg = true
 				}
-				if b.Type == "tool_result" {
+				if p.Kind == chat.PartToolResult {
 					hasToolResultMsg = true
 				}
 			}
 		}
-		assert.True(t, hasToolUseMsg, "history should contain tool_use message")
+		assert.True(t, hasToolCallMsg, "history should contain tool_call message")
 		assert.True(t, hasToolResultMsg, "history should contain tool_result message")
 	})
 
@@ -1380,14 +1385,14 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 
 		// Tool loop with final text
 		mock := &multiTurnStreamer{
-			calls: [][]anthropic.StreamEvent{
+			calls: [][]chat.StreamEvent{
 				{
-					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":1}`},
-					{Type: "message_stop"},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "go_to_page", Input: json.RawMessage(`{"page":1}`)}},
+					{Kind: chat.EventDone},
 				},
 				{
-					{Type: "content_block_delta", Text: "Here is page 1"},
-					{Type: "message_stop"},
+					{Kind: chat.EventDelta, Text:"Here is page 1"},
+					{Kind: chat.EventDone},
 				},
 			},
 		}
@@ -1443,14 +1448,14 @@ func TestSendMessage_PersistsSnapshotPageImage(t *testing.T) {
 	require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 	mock := &multiTurnStreamer{
-		calls: [][]anthropic.StreamEvent{
+		calls: [][]chat.StreamEvent{
 			{
-				{Type: "tool_use", ToolUseID: "toolu_snap", ToolName: "snapshot_page", ToolInput: `{"page":1}`},
-				{Type: "message_stop"},
+				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_snap", Name: "snapshot_page", Input: json.RawMessage(`{"page":1}`)}},
+				{Kind: chat.EventDone},
 			},
 			{
-				{Type: "content_block_delta", Text: "I see the chart"},
-				{Type: "message_stop"},
+				{Kind: chat.EventDelta, Text:"I see the chart"},
+				{Kind: chat.EventDone},
 			},
 		},
 	}
@@ -1480,16 +1485,15 @@ func TestSendMessage_PersistsSnapshotPageImage(t *testing.T) {
 	}
 	require.NotNil(t, toolResultMsg, "should persist tool_result message")
 
-	// Deserialize and verify it contains image content parts
-	var blocks []anthropic.ContentBlock
-	require.NoError(t, json.Unmarshal([]byte(*toolResultMsg.ContentBlocks), &blocks))
-	require.Len(t, blocks, 1)
-	assert.Equal(t, "tool_result", blocks[0].Type)
-	require.NotEmpty(t, blocks[0].ContentParts, "snapshot_page tool_result should contain image content parts")
-	assert.Equal(t, "image", blocks[0].ContentParts[0].Type)
-	require.NotNil(t, blocks[0].ContentParts[0].Source)
-	assert.Equal(t, "image/png", blocks[0].ContentParts[0].Source.MediaType)
-	assert.NotEmpty(t, blocks[0].ContentParts[0].Source.Data)
+	// Deserialize and verify it contains image content
+	var parts []chat.Part
+	require.NoError(t, json.Unmarshal([]byte(*toolResultMsg.ContentBlocks), &parts))
+	require.Len(t, parts, 1)
+	assert.Equal(t, chat.PartToolResult, parts[0].Kind)
+	require.NotNil(t, parts[0].ToolResult, "snapshot_page should have a tool result")
+	require.NotNil(t, parts[0].ToolResult.Image, "snapshot_page tool_result should contain image content")
+	assert.Equal(t, "image/png", parts[0].ToolResult.Image.MediaType)
+	assert.NotEmpty(t, parts[0].ToolResult.Image.Data)
 }
 
 func TestSendMessage_ReloadsPersistedAttachmentsInHistory(t *testing.T) {
@@ -1509,9 +1513,9 @@ func TestSendMessage_ReloadsPersistedAttachmentsInHistory(t *testing.T) {
 
 	// --- Turn 1: send message with attachment ---
 	mock1 := &mockStreamer{
-		events: []anthropic.StreamEvent{
-			{Type: "content_block_delta", Text: "I see a chart"},
-			{Type: "message_stop"},
+		events: []chat.StreamEvent{
+			{Kind: chat.EventDelta, Text:"I see a chart"},
+			{Kind: chat.EventDone},
 		},
 	}
 	mux1 := NewMux(tdb.DB, storage, mock1, nil, slog.Default(), WithDataDir(dataDir))
@@ -1526,9 +1530,9 @@ func TestSendMessage_ReloadsPersistedAttachmentsInHistory(t *testing.T) {
 	// --- Turn 2: follow-up question (simulates page reload — no in-memory state) ---
 	mock2 := &captureStreamer{
 		mockStreamer: mockStreamer{
-			events: []anthropic.StreamEvent{
-				{Type: "content_block_delta", Text: "Yes, the chart shows..."},
-				{Type: "message_stop"},
+			events: []chat.StreamEvent{
+				{Kind: chat.EventDelta, Text:"Yes, the chart shows..."},
+				{Kind: chat.EventDone},
 			},
 		},
 	}
@@ -1545,17 +1549,17 @@ func TestSendMessage_ReloadsPersistedAttachmentsInHistory(t *testing.T) {
 	require.NotNil(t, mock2.captured)
 	msgs := mock2.captured.Messages
 
-	// The first user message should have content blocks with an image
+	// The first user message should have parts with an image
 	firstMsg := msgs[0]
-	assert.Equal(t, "user", firstMsg.Role)
-	require.NotEmpty(t, firstMsg.ContentBlocks, "first user message should have content blocks with image from persisted attachment")
+	assert.Equal(t, chat.RoleUser, firstMsg.Role)
+	require.NotEmpty(t, firstMsg.Parts, "first user message should have parts with image from persisted attachment")
 
 	var hasImage bool
-	for _, b := range firstMsg.ContentBlocks {
-		if b.Type == "image" && b.Source != nil {
+	for _, p := range firstMsg.Parts {
+		if p.Kind == chat.PartImage && p.Image != nil {
 			hasImage = true
-			assert.Equal(t, "image/png", b.Source.MediaType)
-			assert.NotEmpty(t, b.Source.Data)
+			assert.Equal(t, "image/png", p.Image.MediaType)
+			assert.NotEmpty(t, p.Image.Data)
 		}
 	}
 	assert.True(t, hasImage, "first user message should include the persisted attachment image")
@@ -1577,9 +1581,9 @@ func TestSendMessage_PersistsAttachments(t *testing.T) {
 	require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 	mock := &mockStreamer{
-		events: []anthropic.StreamEvent{
-			{Type: "content_block_delta", Text: "I see the figure"},
-			{Type: "message_stop"},
+		events: []chat.StreamEvent{
+			{Kind: chat.EventDelta, Text:"I see the figure"},
+			{Kind: chat.EventDone},
 		},
 	}
 	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithDataDir(dataDir))
@@ -1732,14 +1736,14 @@ func TestSendMessage_SearchUsesIndex(t *testing.T) {
 	require.NoError(t, store.CreateChatSession(tdb.DB, session))
 
 	mock := &multiTurnStreamer{
-		calls: [][]anthropic.StreamEvent{
+		calls: [][]chat.StreamEvent{
 			{
-				{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "search_pdf", ToolInput: `{"query":"neural"}`},
-				{Type: "message_stop"},
+				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "search_pdf", Input: json.RawMessage(`{"query":"neural"}`)}},
+				{Kind: chat.EventDone},
 			},
 			{
-				{Type: "content_block_delta", Text: "Found neural on pages 1 and 2"},
-				{Type: "message_stop"},
+				{Kind: chat.EventDelta, Text:"Found neural on pages 1 and 2"},
+				{Kind: chat.EventDone},
 			},
 		},
 	}
@@ -1757,8 +1761,10 @@ func TestSendMessage_SearchUsesIndex(t *testing.T) {
 	// Verify tool result contains FTS results
 	require.Len(t, mock.requests, 2)
 	lastMsg := mock.requests[1].Messages[len(mock.requests[1].Messages)-1]
-	require.NotEmpty(t, lastMsg.ContentBlocks)
-	assert.Contains(t, lastMsg.ContentBlocks[0].Content, "neural")
+	require.NotEmpty(t, lastMsg.Parts)
+	assert.Equal(t, chat.PartToolResult, lastMsg.Parts[0].Kind)
+	require.NotNil(t, lastMsg.Parts[0].ToolResult)
+	assert.Contains(t, lastMsg.Parts[0].ToolResult.Content, "neural")
 }
 
 // createTestPDFWithText is a helper that creates a valid PDF with text.
@@ -1772,7 +1778,7 @@ func createTestPDFWithText(t *testing.T, path string, text string) {
 	require.NoError(t, doc.OutputFileAndClose(path))
 }
 
-func testMuxWithChat(t *testing.T, tdb *store.TestDB, chat ChatStreamer) *http.ServeMux {
+func testMuxWithChat(t *testing.T, tdb *store.TestDB, provider chat.Provider) *http.ServeMux {
 	t.Helper()
-	return NewMux(tdb.DB, pdf.NewStorage(t.TempDir()), chat, nil, slog.Default())
+	return NewMux(tdb.DB, pdf.NewStorage(t.TempDir()), provider, nil, slog.Default())
 }

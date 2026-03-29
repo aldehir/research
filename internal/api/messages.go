@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -14,16 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aldehir/research/internal/anthropic"
+	"github.com/aldehir/research/internal/chat"
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
 )
-
-// ChatStreamer is an interface for streaming chat responses.
-// The real *anthropic.Client satisfies this interface.
-type ChatStreamer interface {
-	Stream(ctx context.Context, req anthropic.Request) (<-chan anthropic.StreamEvent, error)
-}
 
 type attachment struct {
 	ImageData string `json:"image_data"`
@@ -33,13 +26,13 @@ type attachment struct {
 
 const maxToolLoopIterations = 10
 
-func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, dataDir string, logger *slog.Logger) http.HandlerFunc {
+func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider, dataDir string, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		paperID := r.PathValue("id")
 		chatID := r.PathValue("chatId")
 
-		// Check if chat streamer is available
-		if chat == nil {
+		// Check if provider is available
+		if provider == nil {
 			writeError(w, http.StatusServiceUnavailable, "chat features unavailable", logger)
 			return
 		}
@@ -146,16 +139,16 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 			attsByMsg[a.MessageID] = append(attsByMsg[a.MessageID], a)
 		}
 
-		// Convert to anthropic messages, appending viewer context to the latest user message
-		var anthropicMessages []anthropic.Message
+		// Convert to domain messages, appending viewer context to the latest user message
+		var chatMessages []chat.Message
 		for _, m := range messages {
 			// Messages with content_blocks: reconstruct structured content
 			if m.ContentBlocks != nil {
-				var blocks []anthropic.ContentBlock
-				if err := json.Unmarshal([]byte(*m.ContentBlocks), &blocks); err == nil {
-					anthropicMessages = append(anthropicMessages, anthropic.Message{
-						Role:          m.Role,
-						ContentBlocks: blocks,
+				var parts []chat.Part
+				if err := json.Unmarshal([]byte(*m.ContentBlocks), &parts); err == nil {
+					chatMessages = append(chatMessages, chat.Message{
+						Role:  chat.Role(m.Role),
+						Parts: parts,
 					})
 					continue
 				}
@@ -167,7 +160,7 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 
 				// Build multimodal message if attachments are present (current turn)
 				if len(body.Attachments) > 0 {
-					anthropicMessages = append(anthropicMessages, buildMultimodalUserMessage(content, body.Attachments))
+					chatMessages = append(chatMessages, buildMultimodalUserMessage(content, body.Attachments))
 					continue
 				}
 			}
@@ -175,20 +168,20 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 			// Reconstruct multimodal message from persisted attachments (past turns)
 			if m.Role == "user" && m.ID != userMsg.ID {
 				if persistedAtts, ok := attsByMsg[m.ID]; ok && len(persistedAtts) > 0 {
-					blocks, err := buildBlocksFromPersistedAttachments(content, persistedAtts, logger)
+					parts, err := buildPartsFromPersistedAttachments(content, persistedAtts, logger)
 					if err == nil {
-						anthropicMessages = append(anthropicMessages, anthropic.Message{
-							Role:          m.Role,
-							ContentBlocks: blocks,
+						chatMessages = append(chatMessages, chat.Message{
+							Role:  chat.RoleUser,
+							Parts: parts,
 						})
 						continue
 					}
 				}
 			}
 
-			anthropicMessages = append(anthropicMessages, anthropic.Message{
-				Role:    m.Role,
-				Content: content,
+			chatMessages = append(chatMessages, chat.Message{
+				Role:  chat.Role(m.Role),
+				Parts: []chat.Part{{Kind: chat.PartText, Text: content}},
 			})
 		}
 
@@ -210,13 +203,15 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 		}
 
 		// Build request
-		req := anthropic.Request{
-			Messages:       anthropicMessages,
-			DocumentTitle:  docTitle,
-			DocumentAuthor: docAuthor,
-			DocumentDate:   docDate,
-			TotalPages:     totalPages,
-			Tools:          anthropic.PDFTools(),
+		req := chat.Request{
+			SystemPrompt: chat.BuildSystemPrompt(chat.PromptContext{
+				DocumentTitle:  docTitle,
+				DocumentAuthor: docAuthor,
+				DocumentDate:   docDate,
+				TotalPages:     totalPages,
+			}),
+			Messages: chatMessages,
+			Tools:    chat.PDFTools(),
 		}
 
 		// Set SSE headers before calling Stream
@@ -242,24 +237,26 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 
 		// Tool execution loop
 		for i := 0; i < maxToolLoopIterations; i++ {
-			ch, err := chat.Stream(r.Context(), req)
+			ch, err := provider.Stream(r.Context(), req)
 			if err != nil {
 				logger.Error("stream start failed", "chat_id", chatID, "error", err)
 				sendSSE(sseResponse{Type: "error", Error: err.Error()})
 				return
 			}
 
-			var toolCalls []anthropic.StreamEvent
+			var toolCalls []chat.ToolCall
 			var iterationText strings.Builder
 			for ev := range ch {
-				switch ev.Type {
-				case "content_block_delta":
+				switch ev.Kind {
+				case chat.EventDelta:
 					fullText.WriteString(ev.Text)
 					iterationText.WriteString(ev.Text)
 					sendSSE(sseResponse{Type: "delta", Text: ev.Text})
-				case "tool_use":
-					toolCalls = append(toolCalls, ev)
-				case "message_stop":
+				case chat.EventToolCall:
+					if ev.ToolCall != nil {
+						toolCalls = append(toolCalls, *ev.ToolCall)
+					}
+				case chat.EventDone:
 					// Don't emit done yet if we have tool calls to process
 				}
 			}
@@ -274,87 +271,87 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 			logger.Info("tool_loop_iteration", "iteration", toolIterations, "tool_call_count", len(toolCalls))
 
 			// Process tool calls
-			// Build assistant message with tool_use blocks (include preceding text if any)
-			var assistantBlocks []anthropic.ContentBlock
+			// Build assistant message with tool call parts (include preceding text if any)
+			var assistantParts []chat.Part
 			if iterationText.Len() > 0 {
-				assistantBlocks = append(assistantBlocks, anthropic.ContentBlock{
-					Type: "text",
+				assistantParts = append(assistantParts, chat.Part{
+					Kind: chat.PartText,
 					Text: iterationText.String(),
 				})
 			}
 			for _, tc := range toolCalls {
-				logger.Debug("tool_call", "name", tc.ToolName, "args", tc.ToolInput)
-				assistantBlocks = append(assistantBlocks, anthropic.ContentBlock{
-					Type:  "tool_use",
-					ID:    tc.ToolUseID,
-					Name:  tc.ToolName,
-					Input: json.RawMessage(tc.ToolInput),
+				logger.Debug("tool_call", "name", tc.Name, "args", string(tc.Input))
+				assistantParts = append(assistantParts, chat.Part{
+					Kind:     chat.PartToolCall,
+					ToolCall: &chat.ToolCall{ID: tc.ID, Name: tc.Name, Input: tc.Input},
 				})
 
 				// Send tool_call SSE to client for UI
 				sendSSE(sseToolCall{
 					Type: "tool_call",
-					Name: tc.ToolName,
-					Args: json.RawMessage(tc.ToolInput),
+					Name: tc.Name,
+					Args: json.RawMessage(tc.Input),
 				})
 			}
 
 			// Append assistant tool_use message to request
-			assistantMsg := anthropic.Message{
-				Role:          "assistant",
-				ContentBlocks: assistantBlocks,
+			assistantMsg := chat.Message{
+				Role:  chat.RoleAssistant,
+				Parts: assistantParts,
 			}
 			req.Messages = append(req.Messages, assistantMsg)
 
 			// Persist assistant tool_use message
-			persistContentBlocks(db, chatID, "assistant", assistantBlocks, logger)
+			persistParts(db, chatID, "assistant", assistantParts, logger)
 
-			// Execute tools and build tool_result blocks
+			// Execute tools and build tool_result parts
 			tctx := toolContext{db: db, paperID: paperID, pdfPath: pdfPath}
-			var resultBlocks []anthropic.ContentBlock
+			var resultParts []chat.Part
 			for _, tc := range toolCalls {
 				toolStart := time.Now()
-				result := executeToolCall(tc.ToolName, tc.ToolInput, tctx, logger)
+				result := executeToolCall(tc.Name, string(tc.Input), tctx, logger)
 				logger.Info("tool_result",
-					"name", tc.ToolName,
+					"name", tc.Name,
 					"content_type", result.contentType,
 					"result_length", len(result.text),
 					"duration", time.Since(toolStart),
 				)
 
-				block := anthropic.ContentBlock{
-					Type:      "tool_result",
-					ToolUseID: tc.ToolUseID,
+				part := chat.Part{
+					Kind: chat.PartToolResult,
+					ToolResult: &chat.ToolResult{
+						ToolCallID: tc.ID,
+					},
 				}
 				sse := sseToolResult{
 					Type: "tool_result",
-					Name: tc.ToolName,
+					Name: tc.Name,
 				}
 
 				if result.contentType == "image" {
-					block.ContentParts = result.contentParts
+					part.ToolResult.Image = result.image
 					sse.ContentType = "image"
 					sse.ImageData = result.imageData
-					sse.Text = fmt.Sprintf("Rendered page %s as image", tc.ToolInput)
+					sse.Text = fmt.Sprintf("Rendered page %s as image", string(tc.Input))
 					sse.Preview = "Page snapshot rendered"
 				} else {
-					block.Content = result.text
+					part.ToolResult.Content = result.text
 					sse.Text = result.text
 					sse.Preview = truncatePreview(result.text, toolResultPreviewLen)
 				}
 
-				resultBlocks = append(resultBlocks, block)
+				resultParts = append(resultParts, part)
 				sendSSE(sse)
 			}
 
-			// Append user message with tool_result blocks
-			req.Messages = append(req.Messages, anthropic.Message{
-				Role:          "user",
-				ContentBlocks: resultBlocks,
+			// Append user message with tool_result parts
+			req.Messages = append(req.Messages, chat.Message{
+				Role:  chat.RoleUser,
+				Parts: resultParts,
 			})
 
 			// Persist user tool_result message
-			persistContentBlocks(db, chatID, "user", resultBlocks, logger)
+			persistParts(db, chatID, "user", resultParts, logger)
 		}
 
 		logger.Info("response_complete",
@@ -379,24 +376,24 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 	}
 }
 
-// persistContentBlocks saves a message with JSON-serialized content blocks to the DB.
-func persistContentBlocks(db *sql.DB, chatID, role string, blocks []anthropic.ContentBlock, logger *slog.Logger) {
+// persistParts saves a message with JSON-serialized chat.Part slices to the DB.
+func persistParts(db *sql.DB, chatID, role string, parts []chat.Part, logger *slog.Logger) {
 	id, err := newUUID()
 	if err != nil {
 		logger.Error("failed to generate UUID for tool message", "error", err)
 		return
 	}
-	blocksJSON, err := json.Marshal(blocks)
+	partsJSON, err := json.Marshal(parts)
 	if err != nil {
-		logger.Error("failed to marshal content blocks", "error", err)
+		logger.Error("failed to marshal content parts", "error", err)
 		return
 	}
-	blocksStr := string(blocksJSON)
+	partsStr := string(partsJSON)
 	msg := store.Message{
 		ID:            id,
 		ChatSessionID: chatID,
 		Role:          role,
-		ContentBlocks: &blocksStr,
+		ContentBlocks: &partsStr,
 		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := store.CreateMessage(db, msg); err != nil {
@@ -404,9 +401,9 @@ func persistContentBlocks(db *sql.DB, chatID, role string, blocks []anthropic.Co
 	}
 }
 
-// buildMultimodalUserMessage creates an anthropic message with text and image blocks from request attachments.
-func buildMultimodalUserMessage(content string, attachments []attachment) anthropic.Message {
-	var blocks []anthropic.ContentBlock
+// buildMultimodalUserMessage creates a domain message with text and image parts from request attachments.
+func buildMultimodalUserMessage(content string, attachments []attachment) chat.Message {
+	var parts []chat.Part
 
 	var textContent strings.Builder
 	textContent.WriteString(content)
@@ -415,30 +412,26 @@ func buildMultimodalUserMessage(content string, attachments []attachment) anthro
 			textContent.WriteString(fmt.Sprintf("\n\n[Attached region from page %d]\n%s", att.Page, att.Text))
 		}
 	}
-	blocks = append(blocks, anthropic.ContentBlock{
-		Type: "text",
+	parts = append(parts, chat.Part{
+		Kind: chat.PartText,
 		Text: textContent.String(),
 	})
 
 	for _, att := range attachments {
 		if att.ImageData != "" {
-			blocks = append(blocks, anthropic.ContentBlock{
-				Type: "image",
-				Source: &anthropic.ImageSource{
-					Type:      "base64",
-					MediaType: "image/png",
-					Data:      att.ImageData,
-				},
+			parts = append(parts, chat.Part{
+				Kind:  chat.PartImage,
+				Image: &chat.Image{MediaType: "image/png", Data: att.ImageData},
 			})
 		}
 	}
 
-	return anthropic.Message{Role: "user", ContentBlocks: blocks}
+	return chat.Message{Role: chat.RoleUser, Parts: parts}
 }
 
-// buildBlocksFromPersistedAttachments reads images from disk and builds content blocks for a past user message.
-func buildBlocksFromPersistedAttachments(content string, atts []store.Attachment, logger *slog.Logger) ([]anthropic.ContentBlock, error) {
-	var blocks []anthropic.ContentBlock
+// buildPartsFromPersistedAttachments reads images from disk and builds parts for a past user message.
+func buildPartsFromPersistedAttachments(content string, atts []store.Attachment, logger *slog.Logger) ([]chat.Part, error) {
+	var parts []chat.Part
 
 	var textContent strings.Builder
 	textContent.WriteString(content)
@@ -447,8 +440,8 @@ func buildBlocksFromPersistedAttachments(content string, atts []store.Attachment
 			textContent.WriteString(fmt.Sprintf("\n\n[Attached region from page %d]\n%s", att.Page, att.Text))
 		}
 	}
-	blocks = append(blocks, anthropic.ContentBlock{
-		Type: "text",
+	parts = append(parts, chat.Part{
+		Kind: chat.PartText,
 		Text: textContent.String(),
 	})
 
@@ -458,17 +451,13 @@ func buildBlocksFromPersistedAttachments(content string, atts []store.Attachment
 			logger.Warn("failed to read persisted attachment image", "id", att.ID, "path", att.FilePath, "error", err)
 			continue
 		}
-		blocks = append(blocks, anthropic.ContentBlock{
-			Type: "image",
-			Source: &anthropic.ImageSource{
-				Type:      "base64",
-				MediaType: "image/png",
-				Data:      base64.StdEncoding.EncodeToString(imgBytes),
-			},
+		parts = append(parts, chat.Part{
+			Kind:  chat.PartImage,
+			Image: &chat.Image{MediaType: "image/png", Data: base64.StdEncoding.EncodeToString(imgBytes)},
 		})
 	}
 
-	return blocks, nil
+	return parts, nil
 }
 
 type sseResponse struct {
@@ -502,12 +491,11 @@ func truncatePreview(s string, maxLen int) string {
 }
 
 // toolExecResult holds the result of a tool execution.
-// For most tools, text is populated. For snapshot_page, contentParts carries image data.
 type toolExecResult struct {
-	text         string
-	contentType  string // "text" or "image"
-	contentParts []anthropic.ContentPart
-	imageData    string // base64-encoded image for SSE
+	text        string
+	contentType string     // "text" or "image"
+	image       *chat.Image // non-nil for image results
+	imageData   string      // base64-encoded image for SSE
 }
 
 func textResult(s string) toolExecResult {
@@ -570,7 +558,6 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) to
 		return textResult(text)
 
 	case "go_to_page":
-		// Client-side tool — return success, the SSE event was already sent
 		var args struct {
 			Page int `json:"page"`
 		}
@@ -598,16 +585,7 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) to
 			text:        fmt.Sprintf("Rendered page %d as image (%d bytes)", args.Page, len(pngBytes)),
 			contentType: "image",
 			imageData:   b64,
-			contentParts: []anthropic.ContentPart{
-				{
-					Type: "image",
-					Source: &anthropic.ImageSource{
-						Type:      "base64",
-						MediaType: "image/png",
-						Data:      b64,
-					},
-				},
-			},
+			image:       &chat.Image{MediaType: "image/png", Data: b64},
 		}
 
 	default:

@@ -37,13 +37,13 @@ Currently `internal/api/messages.go` (639 lines) is deeply coupled to `internal/
 - **Frontend**: Generic `ToolCall`/`ToolResult` interfaces over SSE JSON — no coupling
 - **SSE types**: `sseResponse`, `sseToolCall`, `sseToolResult` are already anthropic-free
 
-## Design questions to resolve
+## Design questions — resolved
 
-- [ ] Where should the intermediate types live? Options: `internal/chat/` package, or types in `internal/api/`
-- [ ] Should `ChatStreamer` accept/return domain types, with the Anthropic client wrapped in an adapter? Or should conversion happen at the handler boundary?
-- [ ] Should `content_blocks` JSON in the DB store domain types or remain Anthropic-shaped? (Migration concern for existing data)
-- [ ] Should tool definitions (`PDFTools()`) be expressed in domain types and converted per-provider, or stay provider-specific?
-- [ ] How to handle provider-specific features (e.g. Anthropic's `system` field vs OpenAI's system message convention)?
+- [x] Where should the intermediate types live? → `internal/chat/` package
+- [x] Should `ChatStreamer` accept/return domain types? → Yes, replaced by `chat.Provider` with domain types; Anthropic client wrapped in adapter
+- [x] Should `content_blocks` JSON in the DB store domain types? → Yes, breaking compat with old Anthropic-shaped data
+- [x] Should tool definitions be expressed in domain types? → Yes, `chat.PDFTools()` returns `[]chat.Tool`
+- [x] How to handle provider-specific features? → Domain types include `PartThinking` for thinking/reasoning content
 
 ## Proposed direction (to validate)
 
