@@ -24,8 +24,7 @@
 		isSidebarCollapsed,
 		toggleSidebarCollapsed
 	} from '$lib/panel-widths.svelte';
-	import { Icon, Menu, MessageSquare, Sun, Moon, Plus, PanelLeftOpen, PanelLeftClose, Maximize2 } from '$lib/icons';
-	import { toggleFullscreen, initFullscreen } from '$lib/fullscreen.svelte';
+	import { Icon, Menu, MessageSquare, Sun, Moon, Plus, PanelLeftOpen, PanelLeftClose } from '$lib/icons';
 	import { onMount } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -85,7 +84,6 @@
 	onMount(() => {
 		initTheme();
 		initPanelWidths();
-		initFullscreen();
 	});
 
 	function getLayoutWidth(): number {
@@ -142,14 +140,6 @@
 				{:else}
 					<Icon d={Moon} size={18} />
 				{/if}
-			</button>
-			<button
-				class="theme-toggle"
-				onclick={toggleFullscreen}
-				aria-label="Toggle fullscreen"
-				title="Toggle fullscreen"
-			>
-				<Icon d={Maximize2} size={18} />
 			</button>
 			{#if getIsMobile() && papersStore.selectedPaper}
 				<button

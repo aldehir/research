@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -48,52 +48,5 @@ describe('manifest.json', () => {
 
 	it('has a start_url', () => {
 		expect(manifest.start_url).toBe('/');
-	});
-});
-
-describe('fullscreen store', () => {
-	beforeEach(() => {
-		// Mock Fullscreen API
-		Object.defineProperty(document, 'fullscreenElement', {
-			writable: true,
-			value: null
-		});
-		document.exitFullscreen = vi.fn().mockResolvedValue(undefined);
-		document.documentElement.requestFullscreen = vi.fn().mockResolvedValue(undefined);
-	});
-
-	it('defaults to false when no fullscreen element', async () => {
-		const { isFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
-		initFullscreen();
-		expect(isFullscreen()).toBe(false);
-	});
-
-	it('calls requestFullscreen on toggle when not fullscreen', async () => {
-		const { toggleFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
-		initFullscreen();
-		toggleFullscreen();
-		expect(document.documentElement.requestFullscreen).toHaveBeenCalled();
-	});
-
-	it('calls exitFullscreen on toggle when fullscreen', async () => {
-		const { toggleFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
-		(document as unknown as Record<string, unknown>).fullscreenElement = document.documentElement;
-		initFullscreen();
-		toggleFullscreen();
-		expect(document.exitFullscreen).toHaveBeenCalled();
-	});
-
-	it('tracks fullscreenchange events', async () => {
-		const { isFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
-		initFullscreen();
-		expect(isFullscreen()).toBe(false);
-
-		(document as unknown as Record<string, unknown>).fullscreenElement = document.documentElement;
-		document.dispatchEvent(new Event('fullscreenchange'));
-		expect(isFullscreen()).toBe(true);
-
-		(document as unknown as Record<string, unknown>).fullscreenElement = null;
-		document.dispatchEvent(new Event('fullscreenchange'));
-		expect(isFullscreen()).toBe(false);
 	});
 });
