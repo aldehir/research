@@ -604,17 +604,9 @@
 				<ResizeHandle onResize={(delta) => handleTocResize(delta)} />
 			{/if}
 		{/if}
+		<div class="pages-area">
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="pages-container" class:selection-active={selectionMode} bind:this={scrollContainer} onscroll={handleScroll} onwheel={selectionMode ? undefined : handleWheel}>
-		{#if selectionMode && scrollContainer}
-			<RegionSelect
-				pagesContainer={scrollContainer}
-				{pageElements}
-				{scale}
-				onSelect={handleRegionSelect}
-				onCancel={() => selectionMode = false}
-			/>
-		{/if}
 		{#if loading}
 			<p class="status">Loading PDF...</p>
 		{:else if error}
@@ -628,6 +620,16 @@
 					<!-- Rendered by pdf.js -->
 				</div>
 			{/each}
+		{/if}
+		</div>
+		{#if selectionMode && scrollContainer}
+			<RegionSelect
+				pagesContainer={scrollContainer}
+				{pageElements}
+				{scale}
+				onSelect={handleRegionSelect}
+				onCancel={() => selectionMode = false}
+			/>
 		{/if}
 		</div>
 	</div>
@@ -723,8 +725,15 @@
 		border-right: 1px solid var(--color-toc-border);
 	}
 
-	.pages-container {
+	.pages-area {
 		flex: 1;
+		position: relative;
+		min-height: 0;
+	}
+
+	.pages-container {
+		width: 100%;
+		height: 100%;
 		overflow: auto;
 		background: var(--color-pages-bg);
 		display: flex;
@@ -732,7 +741,6 @@
 		align-items: flex-start;
 		gap: 8px;
 		padding: 8px;
-		position: relative;
 	}
 
 	.pages-container.selection-active {

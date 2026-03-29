@@ -138,16 +138,12 @@
 		inset: 0;
 		cursor: crosshair;
 		z-index: 10;
-		/* Full scrollable area */
-		width: 100%;
-		height: 100%;
-		min-height: 100%;
 	}
 
 	.selection-rect {
 		position: absolute;
 		border: 2px solid var(--color-primary);
-		background: oklch(from var(--color-primary) l c h / 0.15);
+		background: var(--color-primary-light);
 		pointer-events: none;
 	}
 </style>
