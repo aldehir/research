@@ -1,9 +1,9 @@
-export type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark';
 
-const VALID_THEMES: Theme[] = ['light', 'dark', 'system'];
+const VALID_THEMES: Theme[] = ['light', 'dark'];
 const STORAGE_KEY = 'theme';
 
-let theme = $state<Theme>('system');
+let theme = $state<Theme>('light');
 
 export function getTheme(): Theme {
 	return theme;
@@ -16,9 +16,6 @@ export function setTheme(t: Theme): void {
 }
 
 export function getResolvedTheme(): 'light' | 'dark' {
-	if (theme === 'system') {
-		return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-	}
 	return theme;
 }
 
@@ -27,15 +24,11 @@ export function initTheme(): void {
 	if (stored && VALID_THEMES.includes(stored as Theme)) {
 		theme = stored as Theme;
 	} else {
-		theme = 'system';
+		theme = 'light';
 	}
 	applyTheme(theme);
 }
 
 function applyTheme(t: Theme): void {
-	if (t === 'system') {
-		document.documentElement.removeAttribute('data-theme');
-	} else {
-		document.documentElement.setAttribute('data-theme', t);
-	}
+	document.documentElement.setAttribute('data-theme', t);
 }

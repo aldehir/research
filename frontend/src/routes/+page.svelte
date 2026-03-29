@@ -13,7 +13,7 @@
 		toggleChat,
 		closePanel
 	} from '$lib/mobile-layout.svelte';
-	import { getTheme, setTheme, initTheme, type Theme } from '$lib/theme.svelte';
+	import { getTheme, setTheme, initTheme } from '$lib/theme.svelte';
 	import {
 		getSidebarWidth,
 		getChatWidth,
@@ -21,10 +21,8 @@
 		handleSidebarResize,
 		handleChatResize
 	} from '$lib/panel-widths.svelte';
-	import { Icon, Menu, MessageSquare, Sun, Monitor, Moon, Plus } from '$lib/icons';
+	import { Icon, Menu, MessageSquare, Sun, Moon, Plus } from '$lib/icons';
 	import { onMount } from 'svelte';
-
-	const themeOrder: Theme[] = ['light', 'system', 'dark'];
 
 	let layoutEl: HTMLDivElement | undefined = $state();
 	let fileInput: HTMLInputElement | undefined = $state();
@@ -96,8 +94,7 @@
 	}
 
 	function cycleTheme() {
-		const idx = themeOrder.indexOf(getTheme());
-		setTheme(themeOrder[(idx + 1) % themeOrder.length]);
+		setTheme(getTheme() === 'light' ? 'dark' : 'light');
 	}
 
 	$effect(() => {
@@ -138,10 +135,8 @@
 			>
 				{#if getTheme() === 'light'}
 					<Icon d={Sun} size={18} />
-				{:else if getTheme() === 'dark'}
-					<Icon d={Moon} size={18} />
 				{:else}
-					<Icon d={Monitor} size={18} />
+					<Icon d={Moon} size={18} />
 				{/if}
 			</button>
 			{#if getIsMobile() && papersStore.selectedPaper}

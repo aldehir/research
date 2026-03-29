@@ -729,16 +729,6 @@
 		filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(0.8);
 	}
 
-	@media (prefers-color-scheme: dark) {
-		:global(:root:not([data-theme])) .page-wrapper {
-			background: var(--color-bg);
-		}
-
-		:global(:root:not([data-theme])) .page-wrapper :global(canvas) {
-			filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(0.8);
-		}
-	}
-
 	.status {
 		color: var(--color-text-on-dark);
 		font-size: 1.1rem;

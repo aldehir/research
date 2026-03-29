@@ -97,55 +97,6 @@
 	--color-backdrop: oklch(0 0 0 / 0.6);
 }
 
-/* ── System preference fallback (when no data-theme attribute) ── */
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme]) {
-		--color-bg: oklch(0.231 0.0366 296);
-		--color-bg-secondary: oklch(0.2522 0.0397 294);
-		--color-bg-tertiary: oklch(0.2858 0.0442 293);
-		--color-bg-invert: oklch(0.9288 0.0127 286);
-		--color-text: oklch(0.9288 0.0127 286);
-		--color-text-secondary: oklch(0.7107 0.0352 287);
-		--color-text-tertiary: oklch(0.5544 0.0408 287);
-		--color-text-on-dark: oklch(0.9288 0.0127 286);
-		--color-border: oklch(0.3717 0.0392 287);
-		--color-border-strong: oklch(0.4455 0.0375 287);
-		--color-primary: oklch(0.6231 0.1881 290);
-		--color-primary-hover: oklch(0.5461 0.2153 293);
-		--color-primary-light: oklch(0.3462 0.0736 286);
-		--color-primary-text: oklch(1 0 0);
-		--color-danger: oklch(0.6369 0.2078 25.32);
-		--color-danger-hover: oklch(0.5771 0.2151 27.32);
-		--color-surface-hover: oklch(0.3074 0.0487 293);
-		--color-surface-active: oklch(0.3462 0.0736 286);
-		--color-header-bg: oklch(0.1963 0.0402 293);
-		--color-header-text: oklch(0.9288 0.0127 286);
-		--color-header-hover: oklch(1 0 0 / 0.1);
-		--color-toc-bg: oklch(0.1963 0.0402 293);
-		--color-toc-text: oklch(0.7107 0.0352 287);
-		--color-toc-heading: oklch(0.9288 0.0127 286);
-		--color-toc-border: oklch(0.2522 0.0397 294);
-		--color-toc-active: oklch(0.6231 0.1881 290 / 0.2);
-		--color-toc-hover: oklch(1 0 0 / 0.08);
-		--color-pages-bg: oklch(0.1963 0.0402 293);
-		--color-code-bg: oklch(0.1743 0.0227 296);
-		--color-code-text: oklch(0.8787 0.0426 290);
-		--color-code-keyword: oklch(0.7871 0.1187 304.75);
-		--color-code-string: oklch(0.8577 0.1092 142.75);
-		--color-code-comment: oklch(0.5497 0.0345 292);
-		--color-code-function: oklch(0.7664 0.1114 259.89);
-		--color-code-number: oklch(0.8237 0.1014 52.61);
-		--color-code-type: oklch(0.9193 0.0703 86.53);
-		--color-code-variable: oklch(0.7556 0.1297 2.74);
-		--color-code-attr: oklch(0.8467 0.0834 210.3);
-		--color-code-operator: oklch(0.8585 0.0792 182.81);
-		--color-code-border: oklch(1 0 0 / 0.15);
-		--color-code-hover: oklch(1 0 0 / 0.1);
-		--color-shadow: oklch(0 0 0 / 0.5);
-		--color-backdrop: oklch(0 0 0 / 0.6);
-	}
-}
-
 /* ── Base reset ── */
 *,
 *::before,

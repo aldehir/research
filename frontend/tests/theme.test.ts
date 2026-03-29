@@ -2,30 +2,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getTheme, setTheme, getResolvedTheme, initTheme } from '$lib/theme.svelte';
 
-function mockMatchMedia(prefersDark: boolean) {
-	window.matchMedia = (query: string) => ({
-		matches: prefersDark && query === '(prefers-color-scheme: dark)',
-		media: query,
-		onchange: null,
-		addListener: () => {},
-		removeListener: () => {},
-		addEventListener: () => {},
-		removeEventListener: () => {},
-		dispatchEvent: () => false,
-	});
-}
-
 describe('theme store', () => {
 	beforeEach(() => {
 		localStorage.clear();
 		document.documentElement.removeAttribute('data-theme');
-		mockMatchMedia(false);
 	});
 
 	describe('getTheme / setTheme', () => {
-		it('defaults to system', () => {
+		it('defaults to light', () => {
 			initTheme();
-			expect(getTheme()).toBe('system');
+			expect(getTheme()).toBe('light');
 		});
 
 		it('persists to localStorage', () => {
@@ -33,6 +19,14 @@ describe('theme store', () => {
 			setTheme('dark');
 			expect(localStorage.getItem('theme')).toBe('dark');
 			expect(getTheme()).toBe('dark');
+		});
+
+		it('sets data-theme attribute on html element', () => {
+			initTheme();
+			setTheme('dark');
+			expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+			setTheme('light');
+			expect(document.documentElement.getAttribute('data-theme')).toBe('light');
 		});
 	});
 
@@ -44,16 +38,24 @@ describe('theme store', () => {
 			expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
 		});
 
-		it('defaults to system for invalid localStorage value', () => {
+		it('defaults to light for invalid localStorage value', () => {
 			localStorage.setItem('theme', 'garbage');
 			initTheme();
-			expect(getTheme()).toBe('system');
-			expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+			expect(getTheme()).toBe('light');
+			expect(document.documentElement.getAttribute('data-theme')).toBe('light');
 		});
 
-		it('defaults to system when localStorage is empty', () => {
+		it('migrates legacy system value to light', () => {
+			localStorage.setItem('theme', 'system');
 			initTheme();
-			expect(getTheme()).toBe('system');
+			expect(getTheme()).toBe('light');
+			expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+		});
+
+		it('defaults to light when localStorage is empty', () => {
+			initTheme();
+			expect(getTheme()).toBe('light');
+			expect(document.documentElement.getAttribute('data-theme')).toBe('light');
 		});
 	});
 
@@ -68,13 +70,6 @@ describe('theme store', () => {
 			initTheme();
 			setTheme('dark');
 			expect(getResolvedTheme()).toBe('dark');
-		});
-
-		it('returns light for system when prefers-color-scheme is light', () => {
-			// jsdom matchMedia returns false for all queries by default
-			initTheme();
-			setTheme('system');
-			expect(getResolvedTheme()).toBe('light');
 		});
 	});
 });
