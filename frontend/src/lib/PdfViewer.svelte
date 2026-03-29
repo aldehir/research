@@ -7,6 +7,7 @@
 	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale, maxPageWidth } from '$lib/pdf-utils';
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
+	import { getScrollDelta, shouldSkipKeyHandler } from '$lib/pdf-keys';
 	import { setPages, setCurrentPage, setSelectedText } from '$lib/pdf-context.svelte';
 	import { extractOutline, type TocEntry } from '$lib/pdf-outline';
 	import TocPanel from '$lib/TocPanel.svelte';
@@ -407,18 +408,17 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent): void {
-		// Skip when focus is in an input
-		if ((e.target as HTMLElement).tagName === 'INPUT') return;
+		if (shouldSkipKeyHandler(e.target as HTMLElement)) return;
+
+		// Scroll-based navigation (Space, arrows, PageUp/Down)
+		const delta = getScrollDelta(e.key, scrollContainer?.clientHeight ?? 0);
+		if (delta !== null && scrollContainer) {
+			e.preventDefault();
+			scrollContainer.scrollBy({ top: delta, behavior: 'smooth' });
+			return;
+		}
 
 		switch (e.key) {
-			case 'PageDown':
-				e.preventDefault();
-				goToPage(currentPage + 1);
-				break;
-			case 'PageUp':
-				e.preventDefault();
-				goToPage(currentPage - 1);
-				break;
 			case 'Home':
 				e.preventDefault();
 				goToPage(1);

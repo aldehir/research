@@ -38,3 +38,4 @@
 - [x] 34 — Resizable ToC panel `COMPLETE`
 - [x] 35 — Hideable sidebar panel in desktop view `COMPLETE`
 - [x] 36 — Mobile panel layout tweaks `COMPLETE`
+- [x] 37 — Keyboard scroll navigation in PDF viewer `COMPLETE`
