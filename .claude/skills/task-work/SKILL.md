@@ -18,7 +18,13 @@ Pick a task and implement it using strict TDD.
 - Read the task file (`.tasks/NN-slug.md`) to understand the work.
 - Update `.tasks/index.md` status to `IN PROGRESS`.
 
-### 2. Implement with TDD
+### 2. Plan
+
+- Use the **Plan agent** (`subagent_type: "Plan"`) to design the implementation.
+- Pass it the full task description from the task file and any relevant context (e.g. related source files, API conventions from CLAUDE.md).
+- Review the plan it returns. If it looks reasonable, proceed. If not, refine before continuing.
+
+### 3. Implement with TDD
 
 For each checklist item in the task file:
 
@@ -35,7 +41,7 @@ Run the full test suite periodically to catch regressions:
 - Backend: `go test ./...`
 - Frontend: `cd frontend && pnpm test`
 
-### 3. Finish up
+### 4. Finish up
 
 - Verify all checklist items are checked off.
 - Run the full test suite one final time.
