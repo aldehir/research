@@ -48,3 +48,5 @@
 - [x] 44 — Fix horizontal panning when zoomed in `COMPLETE`
 - [x] 45 — iPad fullscreen mode and overscroll bounce fix `COMPLETE`
 - [x] 46 — Custom system prompt for research/textbook assistant `COMPLETE`
+- [ ] 47 — Abstract LLM provider with OpenAI-compatible alternative `TODO`
+- [x] 48 — Lua interpreter with eval endpoint `COMPLETE`

@@ -11,6 +11,7 @@ import (
 	"github.com/aldehir/research/frontend"
 	"github.com/aldehir/research/internal/anthropic"
 	"github.com/aldehir/research/internal/api"
+	luaeval "github.com/aldehir/research/internal/lua"
 	"github.com/aldehir/research/internal/pdf"
 	"github.com/aldehir/research/internal/store"
 	"github.com/spf13/cobra"
@@ -83,7 +84,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	indexer := pdf.NewIndexer(db, logger)
 	go runIndexer(indexer, storage, logger)
 
-	mux := api.NewMux(db, storage, chat, logger)
+	luaEval := luaeval.NewEvaluator(5 * time.Second)
+	mux := api.NewMux(db, storage, chat, luaEval, logger)
 
 	frontendFS := resolveFrontendFS(frontendDir, logger)
 	if frontendFS != nil {

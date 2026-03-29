@@ -12,7 +12,7 @@ import (
 )
 
 func TestHealthCheck(t *testing.T) {
-	mux := NewMux(nil, nil, nil, slog.Default())
+	mux := NewMux(nil, nil, nil, nil, slog.Default())
 
 	t.Run("returns 200 with status ok", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)

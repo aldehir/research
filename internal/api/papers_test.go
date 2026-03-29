@@ -22,7 +22,7 @@ func testMux(t *testing.T) (*http.ServeMux, *store.TestDB, *pdf.Storage) {
 	t.Helper()
 	tdb := store.NewTestDB(t)
 	storage := pdf.NewStorage(filepath.Join(t.TempDir(), "pdfs"))
-	mux := NewMux(tdb.DB, storage, nil, slog.Default())
+	mux := NewMux(tdb.DB, storage, nil, nil, slog.Default())
 	return mux, tdb, storage
 }
 

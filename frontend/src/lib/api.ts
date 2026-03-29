@@ -113,6 +113,20 @@ export async function deleteChatSession(paperId: string, chatId: string): Promis
 	}
 }
 
+export interface LuaEvalResult {
+	output: string;
+	error: string;
+}
+
+export async function evalLua(code: string): Promise<LuaEvalResult> {
+	const response = await fetch('/api/lua/eval', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ code })
+	});
+	return handleResponse<LuaEvalResult>(response);
+}
+
 export interface ToolCall {
 	name: string;
 	args: Record<string, unknown>;

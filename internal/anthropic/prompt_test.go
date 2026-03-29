@@ -57,6 +57,12 @@ func TestBuildSystemPrompt_StructuredExplanations(t *testing.T) {
 	assert.Contains(t, prompt, "definition")
 }
 
+func TestBuildSystemPrompt_MentionsLuaInterpreter(t *testing.T) {
+	prompt := BuildSystemPromptFromContext(PromptContext{})
+	assert.Contains(t, prompt, "Lua")
+	assert.Contains(t, prompt, "```lua")
+}
+
 func TestBuildSystemPrompt_DocumentMetadataStillAppended(t *testing.T) {
 	ctx := PromptContext{
 		DocumentTitle:  "Deep Residual Learning",

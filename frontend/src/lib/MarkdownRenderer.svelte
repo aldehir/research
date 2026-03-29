@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { renderMarkdown } from '$lib/markdown';
 	import { writeClipboard } from '$lib/clipboard';
+	import { evalLua } from '$lib/api';
 
 	interface Props {
 		content: string;
@@ -12,6 +13,8 @@
 
 	const COPY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
 	const CHECK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+	const PLAY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
+	const SPINNER_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lua-spinner"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>';
 
 	async function handleCopy(button: HTMLButtonElement, pre: HTMLPreElement) {
 		const code = pre.querySelector('code');
@@ -25,30 +28,80 @@
 		}, 1500);
 	}
 
+	async function handleRunLua(button: HTMLButtonElement, pre: HTMLPreElement) {
+		const code = pre.querySelector('code');
+		const text = code ? code.textContent ?? '' : pre.textContent ?? '';
+		if (!text.trim()) return;
+
+		button.innerHTML = SPINNER_ICON;
+		button.disabled = true;
+
+		// Find or create result element
+		let resultEl = pre.nextElementSibling as HTMLElement | null;
+		if (!resultEl?.classList.contains('lua-result')) {
+			resultEl = document.createElement('div');
+			resultEl.className = 'lua-result';
+			pre.parentNode!.insertBefore(resultEl, pre.nextSibling);
+		}
+		resultEl.textContent = 'Running...';
+		resultEl.classList.remove('lua-error');
+
+		try {
+			const result = await evalLua(text);
+			if (result.error) {
+				resultEl.textContent = result.error;
+				resultEl.classList.add('lua-error');
+			} else {
+				resultEl.textContent = result.output || '(no output)';
+			}
+		} catch (err) {
+			resultEl.textContent = err instanceof Error ? err.message : 'Eval failed';
+			resultEl.classList.add('lua-error');
+		} finally {
+			button.innerHTML = PLAY_ICON;
+			button.disabled = false;
+		}
+	}
+
 	$effect(() => {
 		// Re-run whenever html changes
 		void html;
 		if (!container) return;
 
-		// Clean up old buttons
-		container.querySelectorAll('.copy-btn').forEach(btn => btn.remove());
+		// Clean up old buttons and result elements
+		container.querySelectorAll('.copy-btn, .lua-run-btn').forEach(btn => btn.remove());
+		container.querySelectorAll('.lua-result').forEach(el => el.remove());
 
 		const pres = container.querySelectorAll('pre');
 		const cleanups: (() => void)[] = [];
 
 		for (const pre of pres) {
 			pre.style.position = 'relative';
-			const btn = document.createElement('button');
-			btn.className = 'copy-btn';
-			btn.type = 'button';
-			btn.innerHTML = COPY_ICON;
-			btn.title = 'Copy code';
 
-			const handler = () => handleCopy(btn, pre);
-			btn.addEventListener('click', handler);
-			cleanups.push(() => btn.removeEventListener('click', handler));
+			// Copy button for all code blocks
+			const copyBtn = document.createElement('button');
+			copyBtn.className = 'copy-btn';
+			copyBtn.type = 'button';
+			copyBtn.innerHTML = COPY_ICON;
+			copyBtn.title = 'Copy code';
+			const copyHandler = () => handleCopy(copyBtn, pre);
+			copyBtn.addEventListener('click', copyHandler);
+			cleanups.push(() => copyBtn.removeEventListener('click', copyHandler));
+			pre.appendChild(copyBtn);
 
-			pre.appendChild(btn);
+			// Run button for Lua code blocks
+			const codeEl = pre.querySelector('code');
+			if (codeEl?.classList.contains('language-lua')) {
+				const runBtn = document.createElement('button');
+				runBtn.className = 'lua-run-btn';
+				runBtn.type = 'button';
+				runBtn.innerHTML = PLAY_ICON;
+				runBtn.title = 'Run Lua';
+				const runHandler = () => handleRunLua(runBtn, pre);
+				runBtn.addEventListener('click', runHandler);
+				cleanups.push(() => runBtn.removeEventListener('click', runHandler));
+				pre.appendChild(runBtn);
+			}
 		}
 
 		return () => {
@@ -153,6 +206,67 @@
 	.markdown-content :global(.copy-btn.copied) {
 		opacity: 1 !important;
 		color: var(--color-code-string);
+	}
+
+	/* Lua run button */
+	.markdown-content :global(.lua-run-btn) {
+		position: absolute;
+		top: 0.5em;
+		right: 2.5em;
+		background: transparent;
+		border: 1px solid var(--color-code-border);
+		border-radius: var(--radius-sm);
+		color: var(--color-code-text);
+		cursor: pointer;
+		padding: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity 0.15s, background 0.15s;
+		line-height: 1;
+	}
+
+	.markdown-content :global(pre:hover .lua-run-btn) {
+		opacity: 0.7;
+	}
+
+	.markdown-content :global(.lua-run-btn:hover) {
+		opacity: 1 !important;
+		background: var(--color-code-hover);
+	}
+
+	.markdown-content :global(.lua-run-btn:disabled) {
+		cursor: wait;
+		opacity: 1 !important;
+	}
+
+	@keyframes -global-lua-spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.markdown-content :global(.lua-spinner) {
+		animation: lua-spin 0.8s linear infinite;
+	}
+
+	/* Lua result block */
+	.markdown-content :global(.lua-result) {
+		background: var(--color-code-bg);
+		color: var(--color-code-text);
+		border: 1px solid var(--color-code-border);
+		border-top: none;
+		border-radius: 0 0 var(--radius) var(--radius);
+		padding: 0.5em 1em;
+		margin: -0.5em 0 0.5em;
+		font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+		font-size: 0.85em;
+		line-height: 1.5;
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	.markdown-content :global(.lua-result.lua-error) {
+		color: var(--color-danger);
 	}
 
 	/* Blockquotes */

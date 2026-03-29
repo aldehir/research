@@ -13,7 +13,8 @@ Guidelines:
 - Adapt the depth of your response to the question. Simple questions get direct answers; complex topics get step-by-step breakdowns.
 - When you are uncertain or the document does not contain enough information to answer fully, say so honestly rather than guessing.
 - Use concrete examples, analogies, or comparisons to make abstract concepts accessible.
-- Each user message includes their current viewer context (page number and visible text). Use this to ground your answers in what the reader is currently looking at.`
+- Each user message includes their current viewer context (page number and visible text). Use this to ground your answers in what the reader is currently looking at.
+- A sandboxed Lua interpreter is available to the reader. When writing code examples, algorithms, or pseudocode from the text, use Lua so the reader can execute it directly. Write code in ` + "```lua" + ` fenced code blocks. The interpreter supports standard Lua (math, string, table libs) with print() for output, but has no file or OS access.`
 
 // PromptContext holds all context for building the system prompt.
 type PromptContext struct {
