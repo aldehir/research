@@ -27,4 +27,5 @@
 - [x] 23 — Add resize handles to side panels in desktop view `COMPLETE`
 - [x] 24 — Reduce ctrl+scroll zoom sensitivity `COMPLETE`
 - [x] 25 — Clean up frontend visual/UI tests `COMPLETE`
-- [ ] 26 — Upload button in sidebar header and full-panel drop zone `TODO`
+- [x] 26 — Upload button in sidebar header and full-panel drop zone `COMPLETE`
+- [ ] 27 — Add syntax highlight support + copy button for code blocks `TODO`
