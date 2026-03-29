@@ -74,4 +74,23 @@
 	.resize-handle.dragging {
 		cursor: col-resize;
 	}
+
+	@media (pointer: coarse) {
+		.resize-handle {
+			padding-inline: 19px;
+			margin-inline: -19px;
+		}
+
+		/* Thicker, always-visible bar on touch devices */
+		.resize-indicator {
+			left: 20px;
+			width: 4px;
+			border-radius: 2px;
+			background: var(--color-border);
+		}
+
+		.resize-handle.dragging .resize-indicator {
+			background: var(--color-primary);
+		}
+	}
 </style>

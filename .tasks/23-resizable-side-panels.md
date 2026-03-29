@@ -26,7 +26,7 @@ Key files:
 - [x] Create a `ResizeHandle.svelte` component with drag behavior (mousedown → mousemove → mouseup), visual grab handle, and cursor feedback
 - [x] Add resize handle between left sidebar and center content in `+page.svelte`; drive sidebar width from reactive state instead of fixed CSS
 - [x] Add resize handle between center content and right chat panel; drive chat panel width from reactive state
-- [x] Enforce min/max width constraints (sidebar: 180–480px, chat: 240–600px)
+- [x] Enforce min/max width constraints (sidebar: 180–640px, chat: 240–800px)
 - [x] Persist panel widths to localStorage and restore on load
 - [x] Ensure resize handles are hidden on mobile (< 1024px) and panels revert to fixed/overlay behavior
 
