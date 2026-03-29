@@ -33,6 +33,20 @@ frontend/           — SvelteKit 5 app (adapter-static, SPA mode)
 - **Dev**: `pnpm dev` from `frontend/`
 - **Runes mode**: Use Svelte 5 runes (`$state`, `$derived`, `$effect`) not legacy `$:` syntax
 
+## Theming & Styling
+
+- **CSS variables**: All colors, radii, and button heights are defined as CSS custom properties in `frontend/src/lib/theme.css`. Never hardcode hex colors in components — use `var(--color-*)`.
+- **Light/dark mode**: Light theme on `:root`, dark theme on `[data-theme="dark"]`, system fallback via `@media (prefers-color-scheme: dark)`. Theme state managed by `frontend/src/lib/theme.svelte.ts`.
+- **Key tokens**: `--color-bg`, `--color-text`, `--color-primary`, `--color-border`, `--color-danger`, `--color-surface-hover`, `--color-surface-active`, `--radius`, `--btn-height-sm/md/lg`. See `theme.css` for the full set.
+
+## Icons
+
+- **No icon library** — icons are self-contained in `frontend/src/lib/icons/`.
+- `Icon.svelte` renders an SVG from a path string. `index.ts` exports named path constants (e.g. `Menu`, `ChevronRight`, `Send`).
+- Usage: `import { Icon, Menu } from '$lib/icons'; <Icon d={Menu} size={20} />`
+- To add a new icon: add an SVG path constant to `index.ts` (24x24 viewBox, stroke-based). Source paths from [lucide.dev](https://lucide.dev).
+- Do NOT add a third-party icon package.
+
 ## TDD Workflow
 
 Every feature follows RED → GREEN → REFACTOR:

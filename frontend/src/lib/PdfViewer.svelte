@@ -11,6 +11,7 @@
 	import { extractOutline, type TocEntry } from '$lib/pdf-outline';
 	import TocPanel from '$lib/TocPanel.svelte';
 	import { consumeNavigateTarget, getNavigateTarget } from '$lib/pdf-navigate.svelte';
+	import { Icon, List, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Maximize2 } from '$lib/icons';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -546,20 +547,20 @@
 					class:active={tocVisible}
 					aria-label="Table of contents"
 					title="Table of contents"
-				>&#9776;</button>
+				><Icon d={List} size={18} /></button>
 				<span class="toolbar-divider"></span>
 			{/if}
 			<button
 				onclick={() => goToPage(currentPage - 1)}
 				disabled={currentPage <= 1}
 				aria-label="Previous page"
-			>&#9664;</button>
+			><Icon d={ChevronLeft} size={18} /></button>
 			<span class="page-info">{currentPage} / {totalPages}</span>
 			<button
 				onclick={() => goToPage(currentPage + 1)}
 				disabled={currentPage >= totalPages}
 				aria-label="Next page"
-			>&#9654;</button>
+			><Icon d={ChevronRight} size={18} /></button>
 			<input
 				type="text"
 				class="page-jump"
@@ -570,15 +571,15 @@
 			/>
 		</div>
 		<div class="toolbar-group">
-			<button onclick={handleZoomOut} disabled={scale <= 0.25} aria-label="Zoom out">&minus;</button>
+			<button onclick={handleZoomOut} disabled={scale <= 0.25} aria-label="Zoom out"><Icon d={ZoomOut} size={18} /></button>
 			<span class="zoom-info">{zoomDisplay}</span>
-			<button onclick={handleZoomIn} disabled={scale >= 5.0} aria-label="Zoom in">+</button>
+			<button onclick={handleZoomIn} disabled={scale >= 5.0} aria-label="Zoom in"><Icon d={ZoomIn} size={18} /></button>
 			<button
 				onclick={handleFitToWidth}
 				class:active={isFitToWidth}
 				aria-label="Fit to width"
 				title="Fit to width"
-			>&#x2194;</button>
+			><Icon d={Maximize2} size={18} /></button>
 		</div>
 	</div>
 
@@ -619,24 +620,29 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.5rem 1rem;
-		background: #f5f5f5;
-		border-bottom: 1px solid #ddd;
+		padding: 0.35rem 0.75rem;
+		background: var(--color-bg-tertiary);
+		border-bottom: 1px solid var(--color-border);
 		flex-shrink: 0;
-		gap: 1rem;
+		gap: 0.75rem;
 	}
 
 	.toolbar-group {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.25rem;
 	}
 
 	.toolbar button {
-		padding: 0.25rem 0.75rem;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		background: white;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: var(--btn-height-sm);
+		padding: 0 0.4rem;
+		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg);
+		color: var(--color-text);
 		cursor: pointer;
 		font-size: 0.9rem;
 	}
@@ -647,33 +653,37 @@
 	}
 
 	.toolbar button:hover:not(:disabled) {
-		background: #e8e8e8;
+		background: var(--color-surface-hover);
 	}
 
 	.toolbar button.active {
-		background: #dbeafe;
-		border-color: #93b4e8;
+		background: var(--color-surface-active);
+		border-color: var(--color-primary);
 	}
 
 	.page-info, .zoom-info {
-		font-size: 0.85rem;
-		min-width: 4em;
+		font-size: 0.8rem;
+		min-width: 3.5em;
 		text-align: center;
+		color: var(--color-text-secondary);
 	}
 
 	.page-jump {
-		width: 4rem;
-		padding: 0.2rem 0.4rem;
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		font-size: 0.85rem;
+		width: 3.5rem;
+		height: var(--btn-height-sm);
+		padding: 0 0.4rem;
+		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		font-size: 0.8rem;
 		text-align: center;
+		background: var(--color-bg);
+		color: var(--color-text);
 	}
 
 	.toolbar-divider {
 		width: 1px;
 		height: 1.2rem;
-		background: #ccc;
+		background: var(--color-border-strong);
 	}
 
 	.viewer-body {
@@ -686,13 +696,13 @@
 		width: 260px;
 		min-width: 200px;
 		flex-shrink: 0;
-		border-right: 1px solid #3a3a52;
+		border-right: 1px solid var(--color-toc-border);
 	}
 
 	.pages-container {
 		flex: 1;
 		overflow: auto;
-		background: #888;
+		background: var(--color-pages-bg);
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -702,7 +712,7 @@
 
 	.page-wrapper {
 		background: white;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 2px 8px var(--color-shadow);
 		flex-shrink: 0;
 	}
 
@@ -712,18 +722,18 @@
 	}
 
 	.status {
-		color: #ddd;
+		color: var(--color-text-on-dark);
 		font-size: 1.1rem;
 		margin-top: 2rem;
 	}
 
 	.status.error {
-		color: #ff6b6b;
+		color: var(--color-danger);
 	}
 
 	@media (max-width: 1023px) {
 		.toolbar {
-			padding: 0.35rem 0.5rem;
+			padding: 0.25rem 0.5rem;
 			gap: 0.5rem;
 			flex-wrap: wrap;
 		}
@@ -731,7 +741,6 @@
 		.toolbar button {
 			min-width: 44px;
 			min-height: 44px;
-			padding: 0.25rem 0.5rem;
 		}
 
 		.page-jump {

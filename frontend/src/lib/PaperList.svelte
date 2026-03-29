@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { papersStore } from '$lib/papers.svelte';
 	import type { Paper } from '$lib/api';
+	import { Icon, X } from '$lib/icons';
 
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', {
@@ -50,7 +51,7 @@
 						onclick={(e) => handleDelete(e, paper)}
 						aria-label="Delete {paper.title}"
 					>
-						&times;
+						<Icon d={X} size={16} />
 					</button>
 				</li>
 			{/each}
@@ -65,7 +66,7 @@
 	}
 
 	.empty {
-		color: #888;
+		color: var(--color-text-tertiary);
 		text-align: center;
 		padding: 2rem 1rem;
 	}
@@ -79,7 +80,7 @@
 	li {
 		display: flex;
 		align-items: center;
-		border-bottom: 1px solid #eee;
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.paper-item {
@@ -93,14 +94,15 @@
 		cursor: pointer;
 		text-align: left;
 		width: 100%;
+		color: var(--color-text);
 	}
 
 	.paper-item:hover {
-		background: #f5f5f5;
+		background: var(--color-surface-hover);
 	}
 
 	.paper-item.selected {
-		background: #e8f0fe;
+		background: var(--color-surface-active);
 	}
 
 	.paper-title {
@@ -112,21 +114,23 @@
 
 	.paper-meta {
 		font-size: 0.8rem;
-		color: #666;
+		color: var(--color-text-secondary);
 	}
 
 	.delete-btn {
-		padding: 0.5rem 0.75rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
 		border: none;
 		background: none;
 		cursor: pointer;
-		color: #999;
-		font-size: 1.2rem;
+		color: var(--color-text-tertiary);
 		line-height: 1;
 	}
 
 	.delete-btn:hover {
-		color: #e00;
+		color: var(--color-danger);
 	}
 
 	@media (max-width: 1023px) {
@@ -138,9 +142,6 @@
 		.delete-btn {
 			min-width: 44px;
 			min-height: 44px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
 		}
 	}
 </style>

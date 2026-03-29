@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { TocEntry } from '$lib/pdf-outline';
 	import { findActiveTocEntry } from '$lib/pdf-outline';
+	import { Icon, ChevronRight, ChevronDown } from '$lib/icons';
 
 	interface Props {
 		entries: TocEntry[];
@@ -40,7 +41,11 @@
 						onclick={() => toggleCollapse(entry)}
 						aria-label={collapsed.has(entry) ? 'Expand' : 'Collapse'}
 					>
-						{collapsed.has(entry) ? '\u25B6' : '\u25BC'}
+						{#if collapsed.has(entry)}
+							<Icon d={ChevronRight} size={14} />
+						{:else}
+							<Icon d={ChevronDown} size={14} />
+						{/if}
 					</button>
 				{:else}
 					<span class="toc-toggle-spacer"></span>
@@ -76,8 +81,8 @@
 		flex-direction: column;
 		height: 100%;
 		overflow: hidden;
-		background: #2a2a3e;
-		color: #d4d4e8;
+		background: var(--color-toc-bg);
+		color: var(--color-toc-text);
 	}
 
 	.toc-header {
@@ -85,7 +90,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid #3a3a52;
+		border-bottom: 1px solid var(--color-toc-border);
 		flex-shrink: 0;
 	}
 
@@ -93,7 +98,7 @@
 		margin: 0;
 		font-size: 0.9rem;
 		font-weight: 600;
-		color: #e8e8f0;
+		color: var(--color-toc-heading);
 	}
 
 	.toc-list {
@@ -107,7 +112,7 @@
 	}
 
 	.toc-entry.active {
-		background: rgba(99, 132, 255, 0.15);
+		background: var(--color-toc-active);
 	}
 
 	.toc-row {
@@ -120,15 +125,16 @@
 		flex-shrink: 0;
 		border: none;
 		background: none;
-		color: #888;
+		color: var(--color-text-tertiary);
 		cursor: pointer;
 		padding: 0.3rem 0.15rem;
-		font-size: 0.55rem;
+		display: flex;
+		align-items: center;
 		line-height: 1;
 	}
 
 	.toc-toggle:hover {
-		color: #bbb;
+		color: var(--color-toc-text);
 	}
 
 	.toc-toggle-spacer {
@@ -150,13 +156,13 @@
 		text-align: left;
 		font-size: 0.82rem;
 		line-height: 1.35;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		min-width: 0;
 	}
 
 	.toc-title:hover {
 		background: rgba(255, 255, 255, 0.08);
-		color: #fff;
+		color: var(--color-toc-heading);
 	}
 
 	.toc-title-text {
@@ -169,11 +175,11 @@
 	.toc-page {
 		flex-shrink: 0;
 		font-size: 0.75rem;
-		color: #777;
+		color: var(--color-text-tertiary);
 	}
 
 	.toc-empty {
-		color: #666;
+		color: var(--color-text-tertiary);
 		font-size: 0.85rem;
 		text-align: center;
 		padding: 2rem 1rem;

@@ -81,8 +81,8 @@
 
 <style>
 	.upload-zone {
-		border: 2px dashed #ccc;
-		border-radius: 8px;
+		border: 2px dashed var(--color-border-strong);
+		border-radius: var(--radius);
 		padding: 1.5rem 1rem;
 		text-align: center;
 		cursor: pointer;
@@ -92,8 +92,8 @@
 
 	.upload-zone:hover,
 	.upload-zone.drag-over {
-		border-color: #4a90d9;
-		background: #f0f7ff;
+		border-color: var(--color-primary);
+		background: var(--color-primary-light);
 	}
 
 	.upload-zone.uploading {
@@ -103,11 +103,11 @@
 
 	.upload-zone p {
 		margin: 0;
-		color: #666;
+		color: var(--color-text-secondary);
 	}
 
 	.error {
-		color: #e00 !important;
+		color: var(--color-danger) !important;
 		margin-top: 0.5rem !important;
 		font-size: 0.85rem;
 	}

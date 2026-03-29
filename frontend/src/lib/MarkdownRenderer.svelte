@@ -46,19 +46,19 @@
 
 	/* Inline code */
 	.markdown-content :global(code) {
-		background: rgba(0, 0, 0, 0.06);
+		background: var(--color-bg-tertiary);
 		padding: 0.15em 0.35em;
-		border-radius: 3px;
+		border-radius: var(--radius-sm);
 		font-size: 0.88em;
 		font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
 	}
 
 	/* Code blocks */
 	.markdown-content :global(pre) {
-		background: #1e1e2e;
-		color: #cdd6f4;
+		background: var(--color-code-bg);
+		color: var(--color-code-text);
 		padding: 0.75em 1em;
-		border-radius: 6px;
+		border-radius: var(--radius);
 		overflow-x: auto;
 		margin: 0.5em 0;
 		font-size: 0.85em;
@@ -75,10 +75,10 @@
 
 	/* Blockquotes */
 	.markdown-content :global(blockquote) {
-		border-left: 3px solid #c0c0c0;
+		border-left: 3px solid var(--color-border-strong);
 		margin: 0.5em 0;
 		padding: 0.25em 0.75em;
-		color: #555;
+		color: var(--color-text-secondary);
 	}
 
 	.markdown-content :global(blockquote p) {
@@ -111,26 +111,26 @@
 
 	.markdown-content :global(th),
 	.markdown-content :global(td) {
-		border: 1px solid #ddd;
+		border: 1px solid var(--color-border);
 		padding: 0.35em 0.6em;
 		text-align: left;
 	}
 
 	.markdown-content :global(th) {
-		background: rgba(0, 0, 0, 0.04);
+		background: var(--color-bg-tertiary);
 		font-weight: 600;
 	}
 
 	/* Horizontal rules */
 	.markdown-content :global(hr) {
 		border: none;
-		border-top: 1px solid #ddd;
+		border-top: 1px solid var(--color-border);
 		margin: 0.75em 0;
 	}
 
 	/* Links */
 	.markdown-content :global(a) {
-		color: #1a73e8;
+		color: var(--color-primary);
 		text-decoration: none;
 	}
 

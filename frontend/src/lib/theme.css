@@ -1,0 +1,123 @@
+/* ── Light theme (default) ── */
+:root {
+	--color-bg: #ffffff;
+	--color-bg-secondary: #f8fafc;
+	--color-bg-tertiary: #f1f5f9;
+	--color-bg-invert: #1e293b;
+	--color-text: #0f172a;
+	--color-text-secondary: #475569;
+	--color-text-tertiary: #94a3b8;
+	--color-text-on-dark: #e2e8f0;
+	--color-border: #e2e8f0;
+	--color-border-strong: #cbd5e1;
+	--color-primary: #2563eb;
+	--color-primary-hover: #1d4ed8;
+	--color-primary-light: #dbeafe;
+	--color-primary-text: #ffffff;
+	--color-danger: #dc2626;
+	--color-danger-hover: #b91c1c;
+	--color-surface-hover: #f1f5f9;
+	--color-surface-active: #dbeafe;
+	--color-header-bg: #1e293b;
+	--color-header-text: #f1f5f9;
+	--color-toc-bg: #1e293b;
+	--color-toc-text: #cbd5e1;
+	--color-toc-heading: #e2e8f0;
+	--color-toc-border: #334155;
+	--color-toc-active: rgba(59, 130, 246, 0.15);
+	--color-pages-bg: #6b7280;
+	--color-code-bg: #1e1e2e;
+	--color-code-text: #cdd6f4;
+	--color-shadow: rgba(0, 0, 0, 0.3);
+	--color-backdrop: rgba(0, 0, 0, 0.4);
+	--radius: 6px;
+	--radius-sm: 4px;
+	--btn-height-sm: 28px;
+	--btn-height-md: 32px;
+	--btn-height-lg: 36px;
+}
+
+/* ── Dark theme ── */
+[data-theme="dark"] {
+	--color-bg: #1a1b2e;
+	--color-bg-secondary: #1e2035;
+	--color-bg-tertiary: #252840;
+	--color-bg-invert: #e2e8f0;
+	--color-text: #e2e8f0;
+	--color-text-secondary: #94a3b8;
+	--color-text-tertiary: #64748b;
+	--color-text-on-dark: #e2e8f0;
+	--color-border: #334155;
+	--color-border-strong: #475569;
+	--color-primary: #3b82f6;
+	--color-primary-hover: #2563eb;
+	--color-primary-light: #1e3a5f;
+	--color-primary-text: #ffffff;
+	--color-danger: #ef4444;
+	--color-danger-hover: #dc2626;
+	--color-surface-hover: #2a2d48;
+	--color-surface-active: #1e3a5f;
+	--color-header-bg: #111327;
+	--color-header-text: #e2e8f0;
+	--color-toc-bg: #111327;
+	--color-toc-text: #94a3b8;
+	--color-toc-heading: #e2e8f0;
+	--color-toc-border: #1e2035;
+	--color-toc-active: rgba(59, 130, 246, 0.2);
+	--color-pages-bg: #111327;
+	--color-code-bg: #0f0f1a;
+	--color-code-text: #cdd6f4;
+	--color-shadow: rgba(0, 0, 0, 0.5);
+	--color-backdrop: rgba(0, 0, 0, 0.6);
+}
+
+/* ── System preference fallback (when no data-theme attribute) ── */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme]) {
+		--color-bg: #1a1b2e;
+		--color-bg-secondary: #1e2035;
+		--color-bg-tertiary: #252840;
+		--color-bg-invert: #e2e8f0;
+		--color-text: #e2e8f0;
+		--color-text-secondary: #94a3b8;
+		--color-text-tertiary: #64748b;
+		--color-text-on-dark: #e2e8f0;
+		--color-border: #334155;
+		--color-border-strong: #475569;
+		--color-primary: #3b82f6;
+		--color-primary-hover: #2563eb;
+		--color-primary-light: #1e3a5f;
+		--color-primary-text: #ffffff;
+		--color-danger: #ef4444;
+		--color-danger-hover: #dc2626;
+		--color-surface-hover: #2a2d48;
+		--color-surface-active: #1e3a5f;
+		--color-header-bg: #111327;
+		--color-header-text: #e2e8f0;
+		--color-toc-bg: #111327;
+		--color-toc-text: #94a3b8;
+		--color-toc-heading: #e2e8f0;
+		--color-toc-border: #1e2035;
+		--color-toc-active: rgba(59, 130, 246, 0.2);
+		--color-pages-bg: #111327;
+		--color-code-bg: #0f0f1a;
+		--color-code-text: #cdd6f4;
+		--color-shadow: rgba(0, 0, 0, 0.5);
+		--color-backdrop: rgba(0, 0, 0, 0.6);
+	}
+}
+
+/* ── Base reset ── */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	font-family: system-ui, -apple-system, sans-serif;
+	background: var(--color-bg);
+	color: var(--color-text);
+}

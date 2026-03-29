@@ -21,3 +21,4 @@
 - [ ] 17 — Save reading position per paper `TODO`
 - [x] 18 — Add subpixel antialiasing to PDF rendering `COMPLETE`
 - [ ] 19 — Fix scaling when first page is smaller than others `COMPLETE`
+- [ ] 20 — URL-based paper routing `TODO`

@@ -13,10 +13,20 @@
 		toggleChat,
 		closePanel
 	} from '$lib/mobile-layout.svelte';
+	import { getTheme, setTheme, initTheme, type Theme } from '$lib/theme.svelte';
+	import { Icon, Menu, MessageSquare, Sun, Monitor, Moon } from '$lib/icons';
+	import { onMount } from 'svelte';
 
-	let fileInput = $state<HTMLInputElement | null>(null);
-	let uploading = $state(false);
-	let uploadError = $state<string | null>(null);
+	const themeOrder: Theme[] = ['light', 'system', 'dark'];
+
+	onMount(() => {
+		initTheme();
+	});
+
+	function cycleTheme() {
+		const idx = themeOrder.indexOf(getTheme());
+		setTheme(themeOrder[(idx + 1) % themeOrder.length]);
+	}
 
 	$effect(() => {
 		untrack(() => {
@@ -35,26 +45,6 @@
 		return () => mql.removeEventListener('change', onChange);
 	});
 
-	async function handleHeaderUpload(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		if (!file.name.toLowerCase().endsWith('.pdf')) {
-			uploadError = 'Only PDF files are accepted';
-			input.value = '';
-			return;
-		}
-		uploadError = null;
-		uploading = true;
-		try {
-			await papersStore.upload(file);
-		} catch (e) {
-			uploadError = e instanceof Error ? e.message : 'Upload failed';
-		} finally {
-			uploading = false;
-			input.value = '';
-		}
-	}
 </script>
 
 <div class="app-shell">
@@ -64,33 +54,30 @@
 				class="mobile-toggle sidebar-toggle"
 				onclick={toggleSidebar}
 				aria-label="Toggle sidebar"
-			>&#9776;</button>
+			><Icon d={Menu} size={20} /></button>
 		{/if}
 		<h1 class="app-title">Research Reader</h1>
 		<div class="header-actions">
-			{#if uploadError}
-				<span class="header-error">{uploadError}</span>
-			{/if}
-			<input
-				bind:this={fileInput}
-				type="file"
-				accept=".pdf"
-				onchange={handleHeaderUpload}
-				hidden
-			/>
 			<button
-				class="upload-btn"
-				onclick={() => fileInput?.click()}
-				disabled={uploading}
+				class="theme-toggle"
+				onclick={cycleTheme}
+				aria-label="Toggle theme"
+				title="Toggle theme"
 			>
-				{uploading ? 'Uploading...' : 'Upload PDF'}
+				{#if getTheme() === 'light'}
+					<Icon d={Sun} size={18} />
+				{:else if getTheme() === 'dark'}
+					<Icon d={Moon} size={18} />
+				{:else}
+					<Icon d={Monitor} size={18} />
+				{/if}
 			</button>
 			{#if getIsMobile() && papersStore.selectedPaper}
 				<button
 					class="mobile-toggle chat-toggle"
 					onclick={toggleChat}
 					aria-label="Toggle chat"
-				>&#x1F4AC;</button>
+				><Icon d={MessageSquare} size={20} /></button>
 			{/if}
 		</div>
 	</header>
@@ -139,16 +126,10 @@
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		padding: 0;
-	}
-
 	.app-shell {
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
-		font-family: system-ui, -apple-system, sans-serif;
 	}
 
 	.app-header {
@@ -157,8 +138,8 @@
 		justify-content: space-between;
 		padding: 0 1rem;
 		height: 48px;
-		background: #1a1a2e;
-		color: #fff;
+		background: var(--color-header-bg);
+		color: var(--color-header-text);
 		flex-shrink: 0;
 	}
 
@@ -172,32 +153,25 @@
 	.header-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.5rem;
 	}
 
-	.header-error {
-		color: #ff8a80;
-		font-size: 0.8rem;
-	}
-
-	.upload-btn {
-		padding: 0.35rem 0.9rem;
-		border: 1px solid rgba(255, 255, 255, 0.3);
-		border-radius: 5px;
-		background: transparent;
-		color: #fff;
-		font-size: 0.85rem;
+	.theme-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: var(--btn-height-md);
+		height: var(--btn-height-md);
+		border: none;
+		background: none;
+		color: var(--color-header-text);
 		cursor: pointer;
+		border-radius: var(--radius);
 		transition: background 0.15s;
 	}
 
-	.upload-btn:hover:not(:disabled) {
+	.theme-toggle:hover {
 		background: rgba(255, 255, 255, 0.1);
-	}
-
-	.upload-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	.app-layout {
@@ -213,24 +187,24 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: #666;
-		border-bottom: 1px solid #eee;
+		color: var(--color-text-secondary);
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.sidebar {
 		width: 280px;
 		min-width: 220px;
-		border-right: 1px solid #ddd;
+		border-right: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
-		background: #fafafa;
+		background: var(--color-bg-secondary);
 	}
 
 	.content {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		color: #666;
+		color: var(--color-text-secondary);
 		min-width: 0;
 		overflow: hidden;
 	}
@@ -241,7 +215,7 @@
 	}
 
 	.placeholder {
-		color: #999;
+		color: var(--color-text-tertiary);
 		font-size: 1.1rem;
 	}
 
@@ -254,8 +228,7 @@
 		height: 44px;
 		border: none;
 		background: none;
-		color: #fff;
-		font-size: 1.25rem;
+		color: var(--color-header-text);
 		cursor: pointer;
 		flex-shrink: 0;
 		-webkit-tap-highlight-color: transparent;
@@ -263,7 +236,7 @@
 
 	.mobile-toggle:hover {
 		background: rgba(255, 255, 255, 0.1);
-		border-radius: 6px;
+		border-radius: var(--radius);
 	}
 
 	/* Backdrop overlay */
@@ -271,7 +244,7 @@
 		position: fixed;
 		inset: 0;
 		top: 48px;
-		background: rgba(0, 0, 0, 0.4);
+		background: var(--color-backdrop);
 		z-index: 90;
 	}
 
@@ -302,7 +275,7 @@
 	.sidebar.mobile-overlay {
 		width: 280px;
 		min-width: 0;
-		box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+		box-shadow: 2px 0 12px var(--color-shadow);
 	}
 
 	/* Mobile chat overlay */
@@ -312,8 +285,8 @@
 		min-width: 280px;
 		display: flex;
 		flex-direction: column;
-		background: #fff;
-		box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
+		background: var(--color-bg);
+		box-shadow: -2px 0 12px var(--color-shadow);
 	}
 
 	/* On mobile, override chat panel to fill the wrapper */
@@ -323,14 +296,7 @@
 		border-left: none;
 	}
 
-	/* Mobile touch target sizing */
 	@media (max-width: 1023px) {
-		.upload-btn {
-			min-height: 44px;
-			min-width: 44px;
-			padding: 0.5rem 1rem;
-		}
-
 		.content {
 			min-width: 0;
 		}

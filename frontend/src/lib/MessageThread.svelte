@@ -4,6 +4,7 @@
 	import { formatToolLabel, formatToolArgs } from '$lib/tool-display';
 	import MarkdownRenderer from '$lib/MarkdownRenderer.svelte';
 	import { tick } from 'svelte';
+	import { Icon, ChevronDown, ChevronRight } from '$lib/icons';
 
 	let container: HTMLDivElement | undefined = $state();
 	let expandedTools = $state(new Set<string>());
@@ -68,7 +69,13 @@
 {#snippet toolChip(segment: StreamSegment & { type: 'tool' }, key: string)}
 	<div class="tool-chip">
 		<button class="tool-chip-header" onclick={() => toggleTool(key)}>
-			<span class="tool-chip-icon">{expandedTools.has(key) ? '▾' : '▸'}</span>
+			<span class="tool-chip-icon">
+				{#if expandedTools.has(key)}
+					<Icon d={ChevronDown} size={14} />
+				{:else}
+					<Icon d={ChevronRight} size={14} />
+				{/if}
+			</span>
 			<span class="tool-chip-label">{formatToolLabel(segment.name)}</span>
 			<span class="tool-chip-args">{formatToolArgs(segment.name, segment.args)}</span>
 			{#if !segment.result}
@@ -146,7 +153,7 @@
 	}
 
 	.empty {
-		color: #888;
+		color: var(--color-text-tertiary);
 		text-align: center;
 		margin-top: 2rem;
 		font-size: 0.9rem;
@@ -154,17 +161,17 @@
 
 	.message {
 		padding: 0.75rem;
-		border-radius: 8px;
+		border-radius: var(--radius);
 		max-width: 90%;
 	}
 
 	.message.user {
-		background: #e8f0fe;
+		background: var(--color-primary-light);
 		align-self: flex-end;
 	}
 
 	.message.assistant {
-		background: #f5f5f5;
+		background: var(--color-bg-tertiary);
 		align-self: flex-start;
 	}
 
@@ -172,7 +179,7 @@
 		font-size: 0.7rem;
 		font-weight: 600;
 		text-transform: uppercase;
-		color: #666;
+		color: var(--color-text-secondary);
 		margin-bottom: 0.25rem;
 	}
 
@@ -188,7 +195,7 @@
 	}
 
 	.thinking {
-		color: #888;
+		color: var(--color-text-tertiary);
 		font-style: italic;
 	}
 
@@ -202,37 +209,39 @@
 		align-items: center;
 		gap: 0.3rem;
 		padding: 0.25rem 0.5rem;
-		background: #e3e8ef;
-		border: 1px solid #cbd2dc;
-		border-radius: 4px;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
 		font-size: 0.8rem;
-		color: #444;
+		color: var(--color-text-secondary);
 		cursor: pointer;
 		font-family: inherit;
 	}
 
 	.tool-chip-header:hover {
-		background: #d5dce6;
+		background: var(--color-surface-hover);
 	}
 
 	.tool-chip-icon {
-		font-size: 0.7rem;
-		width: 0.8rem;
+		display: flex;
+		align-items: center;
+		width: 0.9rem;
 	}
 
 	.tool-chip-label {
 		font-weight: 500;
+		color: var(--color-text);
 	}
 
 	.tool-chip-args {
-		color: #666;
+		color: var(--color-text-secondary);
 	}
 
 	.tool-chip-spinner {
 		display: inline-block;
 		width: 0.7rem;
 		height: 0.7rem;
-		border: 1.5px solid #999;
+		border: 1.5px solid var(--color-text-tertiary);
 		border-top-color: transparent;
 		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
@@ -245,9 +254,9 @@
 	.tool-result-popout {
 		margin-top: 0.3rem;
 		padding: 0.5rem;
-		background: #fff;
-		border: 1px solid #ddd;
-		border-radius: 4px;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
 		max-height: 300px;
 		overflow-y: auto;
 	}
@@ -258,12 +267,12 @@
 		line-height: 1.4;
 		white-space: pre-wrap;
 		word-break: break-word;
-		color: #333;
+		color: var(--color-text);
 	}
 
 	.tool-result-image {
 		max-width: 100%;
 		height: auto;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 	}
 </style>

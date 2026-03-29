@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { getIsStreaming, sendChatMessage, getActiveSessionId } from '$lib/chat.svelte';
 	import { getSelectedText, clearSelectedText, getCurrentPage } from '$lib/pdf-context.svelte';
+	import { Icon, Quote, X, Send } from '$lib/icons';
 
 	interface Props {
 		paperId: string;
@@ -50,7 +51,7 @@
 	{#if attachedSelection}
 		<div class="selection-chip">
 			<span class="chip-text">{attachedSelection}</span>
-			<button class="chip-remove" onclick={removeSelection} aria-label="Remove selection">&times;</button>
+			<button class="chip-remove" onclick={removeSelection} aria-label="Remove selection"><Icon d={X} size={14} /></button>
 		</div>
 	{/if}
 	<div class="input-row">
@@ -68,14 +69,14 @@
 					onclick={captureSelection}
 					title="Attach selected text"
 					aria-label="Attach selected text"
-				>&#x201C;</button>
+				><Icon d={Quote} size={16} /></button>
 			{/if}
 			<button
 				class="send-btn"
 				onclick={handleSend}
 				disabled={getIsStreaming() || !inputText.trim() || !getActiveSessionId()}
 			>
-				Send
+				<Icon d={Send} size={16} />
 			</button>
 		</div>
 	</div>
@@ -83,7 +84,7 @@
 
 <style>
 	.input-area {
-		border-top: 1px solid #ddd;
+		border-top: 1px solid var(--color-border);
 		padding: 0.75rem;
 	}
 
@@ -97,20 +98,22 @@
 		flex: 1;
 		resize: none;
 		padding: 0.5rem;
-		border: 1px solid #ccc;
-		border-radius: 6px;
+		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius);
 		font-family: inherit;
 		font-size: 0.9rem;
 		line-height: 1.4;
+		background: var(--color-bg);
+		color: var(--color-text);
 	}
 
 	textarea:focus {
 		outline: none;
-		border-color: #4285f4;
+		border-color: var(--color-primary);
 	}
 
 	textarea:disabled {
-		background: #f5f5f5;
+		background: var(--color-bg-tertiary);
 		cursor: not-allowed;
 	}
 
@@ -122,38 +125,43 @@
 	}
 
 	.send-btn {
-		padding: 0.5rem 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: var(--btn-height-lg);
+		padding: 0 0.75rem;
 		border: none;
-		background: #4285f4;
-		color: white;
-		border-radius: 6px;
+		background: var(--color-primary);
+		color: var(--color-primary-text);
+		border-radius: var(--radius);
 		cursor: pointer;
 		font-weight: 500;
 	}
 
 	.send-btn:hover:not(:disabled) {
-		background: #3367d6;
+		background: var(--color-primary-hover);
 	}
 
 	.send-btn:disabled {
-		background: #ccc;
+		background: var(--color-border-strong);
 		cursor: not-allowed;
 	}
 
 	.quote-btn {
-		padding: 0.25rem 0.75rem;
-		border: 1px solid #4285f4;
-		background: #e8f0fe;
-		color: #4285f4;
-		border-radius: 6px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: var(--btn-height-md);
+		padding: 0 0.5rem;
+		border: 1px solid var(--color-primary);
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+		border-radius: var(--radius);
 		cursor: pointer;
-		font-size: 1.1rem;
-		font-weight: bold;
-		line-height: 1;
 	}
 
 	.quote-btn:hover {
-		background: #d2e3fc;
+		background: var(--color-surface-active);
 	}
 
 	.selection-chip {
@@ -161,16 +169,16 @@
 		align-items: flex-start;
 		gap: 0.25rem;
 		padding: 0.4rem 0.5rem;
-		background: #e8f0fe;
-		border: 1px solid #c5d8f8;
-		border-radius: 6px;
+		background: var(--color-primary-light);
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius);
 		margin-bottom: 0.5rem;
 	}
 
 	.chip-text {
 		flex: 1;
 		font-size: 0.8rem;
-		color: #333;
+		color: var(--color-text);
 		line-height: 1.3;
 		max-height: 3.9rem;
 		overflow: hidden;
@@ -179,18 +187,19 @@
 	}
 
 	.chip-remove {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		border: none;
 		background: none;
 		cursor: pointer;
-		font-size: 1rem;
-		color: #666;
+		color: var(--color-text-secondary);
 		padding: 0;
-		line-height: 1;
 		flex-shrink: 0;
 	}
 
 	.chip-remove:hover {
-		color: #333;
+		color: var(--color-text);
 	}
 
 	@media (max-width: 1023px) {
@@ -207,9 +216,6 @@
 		.chip-remove {
 			min-width: 44px;
 			min-height: 44px;
-			display: flex;
-			align-items: center;
-			justify-content: center;
 		}
 	}
 </style>
