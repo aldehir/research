@@ -622,9 +622,8 @@
 			{/each}
 		{/if}
 		</div>
-		{#if selectionMode && scrollContainer}
+		{#if selectionMode}
 			<RegionSelect
-				pagesContainer={scrollContainer}
 				{pageElements}
 				{scale}
 				onSelect={handleRegionSelect}

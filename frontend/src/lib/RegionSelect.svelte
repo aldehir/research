@@ -2,20 +2,19 @@
 	import { PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 
 	interface Props {
-		pagesContainer: HTMLDivElement;
 		pageElements: Map<number, HTMLDivElement>;
 		scale: number;
 		onSelect: (region: { page: number; x: number; y: number; w: number; h: number }) => void;
 		onCancel: () => void;
 	}
 
-	let { pagesContainer, pageElements, scale, onSelect, onCancel }: Props = $props();
+	let { pageElements, scale, onSelect, onCancel }: Props = $props();
 
 	let selecting = $state(false);
 	let startX = 0;
 	let startY = 0;
-	let currentX = $state(0);
-	let currentY = $state(0);
+	let currentX = 0;
+	let currentY = 0;
 	let rectX = $state(0);
 	let rectY = $state(0);
 	let rectW = $state(0);
