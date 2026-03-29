@@ -26,12 +26,35 @@ describe('renderMarkdown', () => {
 		});
 	});
 
+	describe('syntax highlighting', () => {
+		it('applies hljs classes to fenced code blocks', () => {
+			const html = renderMarkdown('```javascript\nconst x = 1;\n```');
+			expect(html).toContain('hljs');
+		});
+
+		it('preserves hljs span elements through DOMPurify', () => {
+			const html = renderMarkdown('```javascript\nconst x = 1;\n```');
+			expect(html).toContain('<span class="hljs-');
+		});
+
+		it('applies language class to code element', () => {
+			const html = renderMarkdown('```python\ndef foo(): pass\n```');
+			expect(html).toContain('language-python');
+		});
+
+		it('handles code blocks without a language specifier', () => {
+			const html = renderMarkdown('```\nsome code\n```');
+			expect(html).toContain('<pre>');
+			expect(html).toContain('<code>');
+		});
+	});
+
 	describe('streaming resilience', () => {
 		it('handles incomplete code fences gracefully', () => {
 			const html = renderMarkdown('Here is code:\n```python\ndef hello():');
 			// Should not throw and should render something reasonable
 			expect(html).toBeDefined();
-			expect(html).toContain('def hello():');
+			expect(html).toContain('hello');
 		});
 
 		it('handles incomplete bold syntax', () => {
