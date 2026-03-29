@@ -20,9 +20,11 @@
 		getChatWidth,
 		initPanelWidths,
 		handleSidebarResize,
-		handleChatResize
+		handleChatResize,
+		isSidebarCollapsed,
+		toggleSidebarCollapsed
 	} from '$lib/panel-widths.svelte';
-	import { Icon, Menu, MessageSquare, Sun, Moon, Plus } from '$lib/icons';
+	import { Icon, Menu, MessageSquare, Sun, Moon, Plus, PanelLeftOpen, PanelLeftClose } from '$lib/icons';
 	import { onMount } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -190,6 +192,12 @@
 					</div>
 				{/if}
 			</aside>
+		{:else if isSidebarCollapsed()}
+			<div class="sidebar-collapsed">
+				<button class="sidebar-toggle-btn" onclick={toggleSidebarCollapsed} aria-label="Open sidebar">
+					<Icon d={PanelLeftOpen} size={18} />
+				</button>
+			</div>
 		{:else}
 			<aside
 				class="sidebar"
@@ -207,12 +215,17 @@
 				/>
 				<div class="sidebar-header">
 					<span>Papers</span>
-					<button
-						class="upload-btn"
-						onclick={openFilePicker}
-						aria-label="Upload PDF"
-						disabled={uploading}
-					><Icon d={Plus} size={16} /></button>
+					<div class="sidebar-header-actions">
+						<button
+							class="upload-btn"
+							onclick={openFilePicker}
+							aria-label="Upload PDF"
+							disabled={uploading}
+						><Icon d={Plus} size={16} /></button>
+						<button class="sidebar-toggle-btn" onclick={toggleSidebarCollapsed} aria-label="Close sidebar">
+							<Icon d={PanelLeftClose} size={18} />
+						</button>
+					</div>
 				</div>
 				{#if uploadError}
 					<div class="upload-error">{uploadError}</div>
@@ -301,6 +314,32 @@
 		position: relative;
 	}
 
+	.sidebar-collapsed {
+		display: flex;
+		align-items: flex-start;
+		border-right: 1px solid var(--color-border);
+		padding-top: 0.5rem;
+		background: var(--color-bg-secondary);
+	}
+
+	.sidebar-toggle-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		background: none;
+		cursor: pointer;
+		color: var(--color-text-secondary);
+		padding: 0.25rem;
+		border-radius: var(--radius-sm);
+		flex-shrink: 0;
+	}
+
+	.sidebar-toggle-btn:hover {
+		color: var(--color-text);
+		background: var(--color-surface-hover);
+	}
+
 	.sidebar-header {
 		display: flex;
 		align-items: center;
@@ -312,6 +351,12 @@
 		letter-spacing: 0.05em;
 		color: var(--color-text-secondary);
 		border-bottom: 1px solid var(--color-border);
+	}
+
+	.sidebar-header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
 	}
 
 	.upload-btn {

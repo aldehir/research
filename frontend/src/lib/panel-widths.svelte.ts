@@ -8,6 +8,8 @@ import {
 
 let sidebarWidth = $state(SIDEBAR_DEFAULT);
 let chatWidth = $state(CHAT_DEFAULT);
+let sidebarCollapsed = $state(false);
+let savedSidebarWidth = SIDEBAR_DEFAULT;
 
 export function getSidebarWidth(): number {
   return sidebarWidth;
@@ -30,6 +32,24 @@ export function initPanelWidths(): void {
   if (saved) {
     sidebarWidth = saved.sidebar;
     chatWidth = saved.chat;
+  }
+}
+
+export function isSidebarCollapsed(): boolean {
+  return sidebarCollapsed;
+}
+
+export function setSidebarCollapsed(collapsed: boolean): void {
+  sidebarCollapsed = collapsed;
+}
+
+export function toggleSidebarCollapsed(): void {
+  if (sidebarCollapsed) {
+    sidebarCollapsed = false;
+    sidebarWidth = savedSidebarWidth;
+  } else {
+    savedSidebarWidth = sidebarWidth;
+    sidebarCollapsed = true;
   }
 }
 

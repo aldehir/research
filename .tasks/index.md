@@ -36,4 +36,5 @@
 - [x] 32 — Shift theme hues from blue to purple `COMPLETE`
 - [x] 33 — Remove system theme selection `COMPLETE`
 - [ ] 34 — Resizable ToC panel `TODO`
-- [ ] 35 — Hideable sidebar panel in desktop view `TODO`
+- [x] 35 — Hideable sidebar panel in desktop view `COMPLETE`
+- [ ] 36 — Mobile panel layout tweaks `TODO`
