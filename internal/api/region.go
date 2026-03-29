@@ -48,8 +48,15 @@ func handleExtractRegion(db *sql.DB, storage *pdf.Storage, logger *slog.Logger) 
 			"w", body.W, "h", body.H,
 		)
 
-		// Extract text — empty text is fine, image is the primary value
-		text, err := pdf.ExtractRegionText(pdfPath, body.Page, body.X, body.Y, body.W, body.H)
+		// Extract text with padding so characters near the selection edge
+		// are included. pdftotext clips by character position, which is
+		// stricter than pdftoppm's geometric crop.
+		const textPad = 15 // points
+		tx := max(0, body.X-textPad)
+		ty := max(0, body.Y-textPad)
+		tw := body.W + 2*textPad
+		th := body.H + 2*textPad
+		text, err := pdf.ExtractRegionText(pdfPath, body.Page, tx, ty, tw, th)
 		if err != nil {
 			logger.Warn("region text extraction failed", "error", err)
 			text = ""
