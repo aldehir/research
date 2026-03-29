@@ -384,7 +384,7 @@
 		overflow: hidden;
 	}
 
-	.content:has(.placeholder) {
+	.content:has(:global(.placeholder)) {
 		align-items: center;
 		justify-content: center;
 	}
