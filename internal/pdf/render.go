@@ -54,6 +54,50 @@ func RenderPage(path string, pageNum int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// RenderRegion renders a rectangular region of a PDF page to a PNG image.
+// Coordinates (x, y, w, h) are in PDF points (1/72 inch), origin at top-left.
+// Renders at 150 DPI. No whitespace cropping since the user chose the bounds.
+func RenderRegion(path string, pageNum, x, y, w, h int) ([]byte, error) {
+	count, err := PageCount(path)
+	if err != nil {
+		return nil, fmt.Errorf("render region: %w", err)
+	}
+	if pageNum < 1 || pageNum > count {
+		return nil, fmt.Errorf("page %d out of range (1-%d)", pageNum, count)
+	}
+
+	pageStr := strconv.Itoa(pageNum)
+	out, err := exec.Command(
+		"pdftoppm",
+		"-png",
+		"-r", "150",
+		"-f", pageStr,
+		"-l", pageStr,
+		"-x", strconv.Itoa(x),
+		"-y", strconv.Itoa(y),
+		"-W", strconv.Itoa(w),
+		"-H", strconv.Itoa(h),
+		"-singlefile",
+		path,
+	).Output()
+	if err != nil {
+		return nil, fmt.Errorf("pdftoppm region: %w", err)
+	}
+
+	img, err := png.Decode(bytes.NewReader(out))
+	if err != nil {
+		return nil, fmt.Errorf("decode png: %w", err)
+	}
+
+	final := constrainSize(img, maxImageDimension)
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, final); err != nil {
+		return nil, fmt.Errorf("encode png: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
 // maxImageDimension is the maximum width or height for rendered images.
 // Matches Anthropic's recommended tile size to avoid unnecessary scaling.
 const maxImageDimension = 1568

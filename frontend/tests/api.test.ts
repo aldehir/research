@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { listPapers, uploadPaper, getPaper, deletePaper, getPdfUrl, updateReadingPosition } from '$lib/api';
+import { listPapers, uploadPaper, getPaper, deletePaper, getPdfUrl, updateReadingPosition, extractRegion } from '$lib/api';
 
 const mockPaper = {
 	id: '123e4567-e89b-12d3-a456-426614174000',
@@ -137,6 +137,34 @@ describe('updateReadingPosition', () => {
 		}));
 
 		await expect(updateReadingPosition('nonexistent', 1)).rejects.toThrow('not found');
+	});
+});
+
+describe('extractRegion', () => {
+	it('sends POST with region coordinates and returns text + image', async () => {
+		const mockResult = { text: 'Hello', image_data: 'base64data' };
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(mockResult)
+		}));
+
+		const result = await extractRegion(mockPaper.id, 1, 10, 20, 100, 50);
+
+		expect(fetch).toHaveBeenCalledWith(`/api/papers/${mockPaper.id}/region`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ page: 1, x: 10, y: 20, w: 100, h: 50 })
+		});
+		expect(result).toEqual(mockResult);
+	});
+
+	it('throws on error response', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+			ok: false,
+			json: () => Promise.resolve({ error: 'not found' })
+		}));
+
+		await expect(extractRegion('nonexistent', 1, 0, 0, 100, 100)).rejects.toThrow('not found');
 	});
 });
 

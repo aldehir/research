@@ -24,6 +24,7 @@ func NewMux(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, luaEval *luaeva
 	mux.Handle("POST /api/papers/{id}/chats", wrap(handleCreateChatSession(db, logger)))
 	mux.Handle("GET /api/papers/{id}/chats/{chatId}", wrap(handleGetChatSession(db, logger)))
 	mux.Handle("DELETE /api/papers/{id}/chats/{chatId}", wrap(handleDeleteChatSession(db, logger)))
+	mux.Handle("POST /api/papers/{id}/region", wrap(handleExtractRegion(db, storage, logger)))
 	mux.Handle("POST /api/papers/{id}/chats/{chatId}/messages", wrap(handleSendMessage(db, storage, chat, logger)))
 	if luaEval != nil {
 		mux.Handle("POST /api/lua/eval", wrap(handleEvalLua(luaEval, logger)))

@@ -48,7 +48,8 @@ describe('sendChatMessage', () => {
 			expect.any(Function),
 			5,
 			expect.any(Function),
-			expect.any(Function)
+			expect.any(Function),
+			undefined
 		);
 	});
 
@@ -68,7 +69,8 @@ describe('sendChatMessage', () => {
 			expect.any(Function),
 			undefined,
 			expect.any(Function),
-			expect.any(Function)
+			expect.any(Function),
+			undefined
 		);
 	});
 });

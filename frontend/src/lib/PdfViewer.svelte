@@ -14,7 +14,10 @@
 	import ResizeHandle from '$lib/ResizeHandle.svelte';
 	import { getTocWidth, handleTocResize } from '$lib/panel-widths.svelte';
 	import { consumeNavigateTarget, getNavigateTarget } from '$lib/pdf-navigate.svelte';
-	import { Icon, List, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Maximize2 } from '$lib/icons';
+	import { extractRegion } from '$lib/api';
+	import { addAttachment } from '$lib/attachments.svelte';
+	import RegionSelect from '$lib/RegionSelect.svelte';
+	import { Icon, List, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Maximize2, BoxSelect } from '$lib/icons';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -72,6 +75,7 @@
 	let tocEntries = $state<TocEntry[]>([]);
 	let tocVisible = $state(false);
 	let isDesktop = $state(false);
+	let selectionMode = $state(false);
 
 	let zoomDisplay = $derived(formatZoom(scale));
 	let jumpPageInput = $state('');
@@ -396,6 +400,20 @@
 		rerenderVisible();
 	}
 
+	async function handleRegionSelect(region: { page: number; x: number; y: number; w: number; h: number }): Promise<void> {
+		selectionMode = false;
+		try {
+			const result = await extractRegion(paperId, region.page, region.x, region.y, region.w, region.h);
+			addAttachment({
+				image_data: result.image_data,
+				text: result.text,
+				page: region.page
+			});
+		} catch (e) {
+			console.error('Region extraction failed:', e);
+		}
+	}
+
 	function handleWheel(e: WheelEvent): void {
 		if (!e.ctrlKey && !e.metaKey) return;
 		e.preventDefault();
@@ -569,6 +587,13 @@
 				aria-label="Fit to width"
 				title="Fit to width"
 			><Icon d={Maximize2} size={18} /></button>
+			<span class="toolbar-divider"></span>
+			<button
+				onclick={() => selectionMode = !selectionMode}
+				class:active={selectionMode}
+				aria-label="Select region"
+				title="Select region to attach to chat"
+			><Icon d={BoxSelect} size={18} /></button>
 		</div>
 	</div>
 
@@ -580,7 +605,16 @@
 			{/if}
 		{/if}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onwheel={handleWheel}>
+		<div class="pages-container" class:selection-active={selectionMode} bind:this={scrollContainer} onscroll={handleScroll} onwheel={selectionMode ? undefined : handleWheel}>
+		{#if selectionMode && scrollContainer}
+			<RegionSelect
+				pagesContainer={scrollContainer}
+				{pageElements}
+				{scale}
+				onSelect={handleRegionSelect}
+				onCancel={() => selectionMode = false}
+			/>
+		{/if}
 		{#if loading}
 			<p class="status">Loading PDF...</p>
 		{:else if error}
@@ -698,6 +732,11 @@
 		align-items: flex-start;
 		gap: 8px;
 		padding: 8px;
+		position: relative;
+	}
+
+	.pages-container.selection-active {
+		user-select: none;
 	}
 
 	.page-wrapper {

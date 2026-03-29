@@ -50,3 +50,4 @@
 - [x] 46 — Custom system prompt for research/textbook assistant `COMPLETE`
 - [ ] 47 — Abstract LLM provider with OpenAI-compatible alternative `TODO`
 - [x] 48 — Lua interpreter with eval endpoint `COMPLETE`
+- [x] 49 — Region selection to attach PDF excerpt to chat `COMPLETE`

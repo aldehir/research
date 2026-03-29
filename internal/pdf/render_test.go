@@ -87,6 +87,48 @@ func TestRenderPage_MaxDimension(t *testing.T) {
 	assert.LessOrEqual(t, bounds.Dy(), 1568, "height must not exceed 1568px")
 }
 
+func TestRenderRegion(t *testing.T) {
+	t.Run("renders a region to PNG bytes", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.pdf")
+		createTestPDFWithText(t, path, "Hello World")
+
+		pngBytes, err := RenderRegion(path, 1, 0, 0, 200, 100)
+		require.NoError(t, err)
+		require.NotEmpty(t, pngBytes)
+		// PNG magic header
+		assert.Equal(t, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, pngBytes[:8])
+	})
+
+	t.Run("error on invalid page number", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.pdf")
+		createTestPDFWithText(t, path, "Hello World")
+
+		_, err := RenderRegion(path, 0, 0, 0, 100, 100)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "out of range")
+
+		_, err = RenderRegion(path, 99, 0, 0, 100, 100)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "out of range")
+	})
+
+	t.Run("constrains output size", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "dense.pdf")
+		createTestPDFDense(t, path)
+
+		// Request entire page as region
+		pngBytes, err := RenderRegion(path, 1, 0, 0, 612, 792)
+		require.NoError(t, err)
+
+		img, err := png.Decode(bytes.NewReader(pngBytes))
+		require.NoError(t, err)
+
+		bounds := img.Bounds()
+		assert.LessOrEqual(t, bounds.Dx(), 1568, "width must not exceed 1568px")
+		assert.LessOrEqual(t, bounds.Dy(), 1568, "height must not exceed 1568px")
+	})
+}
+
 func TestCropWhitespace(t *testing.T) {
 	t.Run("crops to content bounding box with padding", func(t *testing.T) {
 		// 100x100 white image with a 10x10 black block at (40,40)-(50,50)

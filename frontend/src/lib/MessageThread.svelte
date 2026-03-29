@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getMessages, getStreamSegments, getStreamingContent, getIsStreaming, getMessageSegments } from '$lib/chat.svelte';
+	import { getMessages, getStreamSegments, getStreamingContent, getIsStreaming, getMessageSegments, getUserAttachments } from '$lib/chat.svelte';
 	import type { StreamSegment } from '$lib/chat.svelte';
 	import { formatToolLabel, formatToolArgs } from '$lib/tool-display';
 	import MarkdownRenderer from '$lib/MarkdownRenderer.svelte';
@@ -120,7 +120,16 @@
 						<MarkdownRenderer content={message.content} />
 					</div>
 				{:else}
-					<div class="content">{message.content}</div>
+					<div class="content">
+						{message.content}
+						{#if getUserAttachments(message.id)}
+							<div class="user-attachments">
+								{#each getUserAttachments(message.id)! as att}
+									<img class="user-attachment-img" src="data:image/png;base64,{att.image_data}" alt="Attached region from page {att.page}" />
+								{/each}
+							</div>
+						{/if}
+					</div>
 				{/if}
 			</div>
 		{/each}
@@ -274,5 +283,20 @@
 		max-width: 100%;
 		height: auto;
 		border-radius: var(--radius-sm);
+	}
+
+	.user-attachments {
+		margin-top: 0.5rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.user-attachment-img {
+		max-width: 200px;
+		max-height: 150px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		object-fit: contain;
 	}
 </style>

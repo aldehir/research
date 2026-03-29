@@ -61,6 +61,27 @@ func TestSearchText(t *testing.T) {
 	assert.Contains(t, results[0].Snippet, "Hello")
 }
 
+func TestExtractRegionText(t *testing.T) {
+	t.Run("extracts text from a specific region", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.pdf")
+		createTestPDFSeparateWords(t, path)
+
+		// The word "Hello" is at x=10mm, y=20mm. In PDF points: x≈28, y≈57.
+		// Use a generous region to capture it.
+		text, err := ExtractRegionText(path, 1, 0, 0, 200, 100)
+		require.NoError(t, err)
+		assert.Contains(t, text, "Hello")
+	})
+
+	t.Run("invalid page returns error", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.pdf")
+		createTestPDFMultiPage(t, path, 1)
+
+		_, err := ExtractRegionText(path, 99, 0, 0, 100, 100)
+		require.Error(t, err)
+	})
+}
+
 func TestSearchText_NoMatch(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.pdf")
 	createTestPDFWithText(t, path, "Hello World")

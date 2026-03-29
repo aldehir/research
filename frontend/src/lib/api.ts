@@ -113,6 +113,27 @@ export async function deleteChatSession(paperId: string, chatId: string): Promis
 	}
 }
 
+export interface RegionResult {
+	text: string;
+	image_data: string;
+}
+
+export async function extractRegion(
+	paperId: string,
+	page: number,
+	x: number,
+	y: number,
+	w: number,
+	h: number
+): Promise<RegionResult> {
+	const response = await fetch(`/api/papers/${paperId}/region`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ page, x, y, w, h })
+	});
+	return handleResponse<RegionResult>(response);
+}
+
 export interface LuaEvalResult {
 	output: string;
 	error: string;
@@ -140,6 +161,12 @@ export interface ToolResult {
 	image_data?: string;
 }
 
+export interface MessageAttachment {
+	image_data: string;
+	text: string;
+	page: number;
+}
+
 export async function sendMessage(
 	paperId: string,
 	chatId: string,
@@ -149,11 +176,15 @@ export async function sendMessage(
 	onError: (error: string) => void,
 	currentPage?: number,
 	onToolCall?: (tool: ToolCall) => void,
-	onToolResult?: (result: ToolResult) => void
+	onToolResult?: (result: ToolResult) => void,
+	attachments?: MessageAttachment[]
 ): Promise<void> {
-	const reqBody: Record<string, string | number> = { content };
+	const reqBody: Record<string, unknown> = { content };
 	if (currentPage) {
 		reqBody.current_page = currentPage;
+	}
+	if (attachments && attachments.length > 0) {
+		reqBody.attachments = attachments;
 	}
 
 	let response: Response;

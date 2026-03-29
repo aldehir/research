@@ -38,6 +38,7 @@ type ContentPart struct {
 // ContentBlock represents a structured content block in a message.
 // For tool_result blocks, use Content for plain text results or
 // ContentParts for structured results (e.g. images).
+// For image blocks in user messages, use Source.
 type ContentBlock struct {
 	Type         string          `json:"-"`
 	Text         string          `json:"-"`
@@ -47,10 +48,12 @@ type ContentBlock struct {
 	ToolUseID    string          `json:"-"`
 	Content      string          `json:"-"`
 	ContentParts []ContentPart   `json:"-"`
+	Source       *ImageSource    `json:"-"`
 }
 
 // MarshalJSON serializes a ContentBlock.
 // For tool_result blocks with ContentParts, the content field is an array.
+// For image blocks, includes the source field.
 func (cb ContentBlock) MarshalJSON() ([]byte, error) {
 	if cb.Type == "tool_result" && len(cb.ContentParts) > 0 {
 		return json.Marshal(struct {
@@ -58,6 +61,13 @@ func (cb ContentBlock) MarshalJSON() ([]byte, error) {
 			ToolUseID string        `json:"tool_use_id,omitempty"`
 			Content   []ContentPart `json:"content"`
 		}{cb.Type, cb.ToolUseID, cb.ContentParts})
+	}
+
+	if cb.Type == "image" && cb.Source != nil {
+		return json.Marshal(struct {
+			Type   string       `json:"type"`
+			Source *ImageSource `json:"source"`
+		}{cb.Type, cb.Source})
 	}
 
 	// Default: use struct tags for all other block types

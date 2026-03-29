@@ -5,7 +5,7 @@ import {
 	deleteChatSession,
 	sendMessage
 } from '$lib/api';
-import type { ChatSession, Message, ToolCall, ToolResult } from '$lib/api';
+import type { ChatSession, Message, ToolCall, ToolResult, MessageAttachment } from '$lib/api';
 import { generateId } from '$lib/uuid';
 import { requestGoToPage } from '$lib/pdf-navigate.svelte';
 
@@ -19,6 +19,7 @@ let messages = $state<Message[]>([]);
 let streamingContent = $state('');
 let streamSegments = $state<StreamSegment[]>([]);
 let messageSegments = $state(new Map<string, StreamSegment[]>());
+let messageAttachments = $state(new Map<string, MessageAttachment[]>());
 let isStreaming = $state(false);
 let toolCallHandler = $state<((tool: ToolCall) => void) | null>(null);
 
@@ -74,7 +75,8 @@ export async function sendChatMessage(
 	paperId: string,
 	chatId: string,
 	content: string,
-	currentPage?: number
+	currentPage?: number,
+	attachments?: MessageAttachment[]
 ): Promise<void> {
 	const userMessage: Message = {
 		id: generateId(),
@@ -84,6 +86,9 @@ export async function sendChatMessage(
 		created_at: new Date().toISOString()
 	};
 	messages = [...messages, userMessage];
+	if (attachments && attachments.length > 0) {
+		messageAttachments = new Map(messageAttachments).set(userMessage.id, attachments);
+	}
 	isStreaming = true;
 	streamingContent = '';
 	streamSegments = [];
@@ -141,7 +146,8 @@ export async function sendChatMessage(
 					break;
 				}
 			}
-		}
+		},
+		attachments
 	);
 }
 
@@ -152,6 +158,7 @@ export function resetChat(): void {
 	streamingContent = '';
 	streamSegments = [];
 	messageSegments = new Map();
+	messageAttachments = new Map();
 	isStreaming = false;
 }
 
@@ -181,6 +188,10 @@ export function getStreamSegments(): StreamSegment[] {
 
 export function getMessageSegments(messageId: string): StreamSegment[] | undefined {
 	return messageSegments.get(messageId);
+}
+
+export function getUserAttachments(messageId: string): MessageAttachment[] | undefined {
+	return messageAttachments.get(messageId);
 }
 
 export function setToolCallHandler(handler: ((tool: ToolCall) => void) | null): void {

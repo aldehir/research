@@ -44,6 +44,33 @@ func ExtractPageText(path string, pageNum int) (string, error) {
 	return strings.TrimRight(string(out), "\n\f"), nil
 }
 
+// ExtractRegionText extracts text from a rectangular region of a PDF page.
+// Coordinates (x, y, w, h) are in PDF points (1/72 inch), origin at top-left.
+func ExtractRegionText(path string, pageNum, x, y, w, h int) (string, error) {
+	count, err := PageCount(path)
+	if err != nil {
+		return "", err
+	}
+	if pageNum < 1 || pageNum > count {
+		return "", fmt.Errorf("page %d out of range (1-%d)", pageNum, count)
+	}
+
+	pageStr := strconv.Itoa(pageNum)
+	out, err := exec.Command(
+		"pdftotext", "-layout",
+		"-f", pageStr, "-l", pageStr,
+		"-x", strconv.Itoa(x),
+		"-y", strconv.Itoa(y),
+		"-W", strconv.Itoa(w),
+		"-H", strconv.Itoa(h),
+		path, "-",
+	).Output()
+	if err != nil {
+		return "", fmt.Errorf("pdftotext region: %w", err)
+	}
+	return strings.TrimRight(string(out), "\n\f"), nil
+}
+
 // SearchText searches all pages of a PDF for the given query string.
 // Returns matching pages with text snippets.
 func SearchText(path string, query string) ([]SearchResult, error) {

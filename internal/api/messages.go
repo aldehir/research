@@ -37,9 +37,15 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 		}
 
 		// Parse request body
+		type attachment struct {
+			ImageData string `json:"image_data"`
+			Text      string `json:"text"`
+			Page      int    `json:"page"`
+		}
 		var body struct {
-			Content     string `json:"content"`
-			CurrentPage int    `json:"current_page"`
+			Content     string       `json:"content"`
+			CurrentPage int          `json:"current_page"`
+			Attachments []attachment `json:"attachments"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body", logger)
@@ -94,6 +100,44 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			content := m.Content
 			if m.Role == "user" && m.ID == userMsg.ID {
 				content = appendViewerContext(content, body.CurrentPage)
+
+				// Build multimodal message if attachments are present
+				if len(body.Attachments) > 0 {
+					var blocks []anthropic.ContentBlock
+
+					// Build combined text: user message + attachment text
+					var textContent strings.Builder
+					textContent.WriteString(content)
+					for _, att := range body.Attachments {
+						if att.Text != "" {
+							textContent.WriteString(fmt.Sprintf("\n\n[Attached region from page %d]\n%s", att.Page, att.Text))
+						}
+					}
+					blocks = append(blocks, anthropic.ContentBlock{
+						Type: "text",
+						Text: textContent.String(),
+					})
+
+					// Add image blocks
+					for _, att := range body.Attachments {
+						if att.ImageData != "" {
+							blocks = append(blocks, anthropic.ContentBlock{
+								Type: "image",
+								Source: &anthropic.ImageSource{
+									Type:      "base64",
+									MediaType: "image/png",
+									Data:      att.ImageData,
+								},
+							})
+						}
+					}
+
+					anthropicMessages = append(anthropicMessages, anthropic.Message{
+						Role:          m.Role,
+						ContentBlocks: blocks,
+					})
+					continue
+				}
 			}
 			anthropicMessages = append(anthropicMessages, anthropic.Message{
 				Role:    m.Role,

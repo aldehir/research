@@ -1124,6 +1124,83 @@ func TestSendMessage_ReadPageUsesIndex(t *testing.T) {
 	assert.Contains(t, lastMsg.ContentBlocks[0].Content, "Indexed page content")
 }
 
+func TestSendMessage_WithAttachments(t *testing.T) {
+	t.Run("includes image and text blocks in anthropic message", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		seedChatSession(t, tdb)
+
+		mock := &captureStreamer{
+			mockStreamer: mockStreamer{
+				events: []anthropic.StreamEvent{
+					{Type: "content_block_delta", Text: "I see the figure"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+		mux := testMuxWithChat(t, tdb, mock)
+
+		body := `{"content":"What does this show?","current_page":3,"attachments":[{"image_data":"aWdub3Jl","text":"Figure 1: Results","page":3}]}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotNil(t, mock.captured)
+
+		// The user message should have content blocks (multimodal)
+		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
+		require.NotEmpty(t, lastMsg.ContentBlocks, "should use content blocks for multimodal message")
+
+		// Should have a text block and an image block
+		var hasText, hasImage bool
+		for _, block := range lastMsg.ContentBlocks {
+			if block.Type == "text" {
+				hasText = true
+				assert.Contains(t, block.Text, "What does this show?")
+				assert.Contains(t, block.Text, "Figure 1: Results")
+			}
+			if block.Type == "image" {
+				hasImage = true
+				require.NotNil(t, block.Source)
+				assert.Equal(t, "image/png", block.Source.MediaType)
+				assert.Equal(t, "aWdub3Jl", block.Source.Data)
+			}
+		}
+		assert.True(t, hasText, "should have text content block")
+		assert.True(t, hasImage, "should have image content block")
+	})
+
+	t.Run("message without attachments works as before", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		seedChatSession(t, tdb)
+
+		mock := &captureStreamer{
+			mockStreamer: mockStreamer{
+				events: []anthropic.StreamEvent{
+					{Type: "content_block_delta", Text: "Ok"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+		mux := testMuxWithChat(t, tdb, mock)
+
+		body := `{"content":"Hello"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotNil(t, mock.captured)
+
+		// Should use plain text content, not blocks
+		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
+		assert.Equal(t, "Hello", lastMsg.Content)
+		assert.Empty(t, lastMsg.ContentBlocks)
+	})
+}
+
 func TestSendMessage_SearchUsesIndex(t *testing.T) {
 	tdb := store.NewTestDB(t)
 	storage := pdf.NewStorage(t.TempDir())
