@@ -112,6 +112,24 @@ func TestRenderRegion(t *testing.T) {
 		assert.Contains(t, err.Error(), "out of range")
 	})
 
+	t.Run("region covers expected area in points", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "test.pdf")
+		createTestPDFWithText(t, path, "Hello World")
+
+		// Request half-page region: 306x396 points on a 612x792 letter page
+		pngBytes, err := RenderRegion(path, 1, 0, 0, 306, 396)
+		require.NoError(t, err)
+
+		img, err := png.Decode(bytes.NewReader(pngBytes))
+		require.NoError(t, err)
+
+		bounds := img.Bounds()
+		// At 150 DPI: 306 points = 306 * 150/72 = 637 pixels
+		// Allow some tolerance for rounding
+		assert.InDelta(t, 637, bounds.Dx(), 5, "width should match half page at 150 DPI")
+		assert.InDelta(t, 825, bounds.Dy(), 5, "height should match half page at 150 DPI")
+	})
+
 	t.Run("constrains output size", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "dense.pdf")
 		createTestPDFDense(t, path)

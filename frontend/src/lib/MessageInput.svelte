@@ -296,8 +296,8 @@
 		padding: 0.75rem;
 		font-size: 0.85rem;
 		line-height: 1.5;
-		white-space: pre-wrap;
-		word-break: break-word;
+		white-space: pre;
+		overflow-x: auto;
 		color: var(--color-text);
 		background: var(--color-bg-tertiary);
 		border-radius: var(--radius-sm);

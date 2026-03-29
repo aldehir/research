@@ -54,6 +54,15 @@ func RenderPage(path string, pageNum int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// renderRegionDPI is the resolution used for pdftoppm region rendering.
+const renderRegionDPI = 150
+
+// pointsToPixels converts PDF points to pixels at the given DPI.
+// pdftoppm -x/-y/-W/-H flags expect pixel coordinates at the output DPI.
+func pointsToPixels(points, dpi int) int {
+	return points * dpi / 72
+}
+
 // RenderRegion renders a rectangular region of a PDF page to a PNG image.
 // Coordinates (x, y, w, h) are in PDF points (1/72 inch), origin at top-left.
 // Renders at 150 DPI. No whitespace cropping since the user chose the bounds.
@@ -66,17 +75,23 @@ func RenderRegion(path string, pageNum, x, y, w, h int) ([]byte, error) {
 		return nil, fmt.Errorf("page %d out of range (1-%d)", pageNum, count)
 	}
 
+	// Convert PDF points to pixels at the rendering DPI
+	px := pointsToPixels(x, renderRegionDPI)
+	py := pointsToPixels(y, renderRegionDPI)
+	pw := pointsToPixels(w, renderRegionDPI)
+	ph := pointsToPixels(h, renderRegionDPI)
+
 	pageStr := strconv.Itoa(pageNum)
 	out, err := exec.Command(
 		"pdftoppm",
 		"-png",
-		"-r", "150",
+		"-r", strconv.Itoa(renderRegionDPI),
 		"-f", pageStr,
 		"-l", pageStr,
-		"-x", strconv.Itoa(x),
-		"-y", strconv.Itoa(y),
-		"-W", strconv.Itoa(w),
-		"-H", strconv.Itoa(h),
+		"-x", strconv.Itoa(px),
+		"-y", strconv.Itoa(py),
+		"-W", strconv.Itoa(pw),
+		"-H", strconv.Itoa(ph),
 		"-singlefile",
 		path,
 	).Output()

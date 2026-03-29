@@ -158,8 +158,8 @@
 
 	.selection-rect {
 		position: absolute;
-		border: 2px solid var(--color-primary);
-		background: var(--color-primary-light);
+		border: 2px dashed var(--color-primary);
+		background: oklch(from var(--color-primary) l c h / 0.08);
 		pointer-events: none;
 	}
 </style>
