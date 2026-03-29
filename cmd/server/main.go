@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/aldehir/research/frontend"
 	"github.com/aldehir/research/internal/anthropic"
 	"github.com/aldehir/research/internal/api"
 	"github.com/aldehir/research/internal/pdf"
@@ -66,7 +67,10 @@ func main() {
 
 	mux := api.NewMux(db, storage, chat, logger)
 
-	serveFrontend(mux, logger)
+	frontendFS := resolveFrontendFS(logger)
+	if frontendFS != nil {
+		serveFrontend(mux, frontendFS)
+	}
 
 	logger.Info("server starting", "addr", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
@@ -90,16 +94,34 @@ func runIndexer(indexer *pdf.Indexer, storage *pdf.Storage, logger *slog.Logger)
 	}
 }
 
-func serveFrontend(mux *http.ServeMux, logger *slog.Logger) {
-	const buildDir = "frontend/build"
-
-	info, err := os.Stat(buildDir)
-	if err != nil || !info.IsDir() {
-		logger.Info("frontend build directory not found, skipping static file serving", "dir", buildDir)
-		return
+func resolveFrontendFS(logger *slog.Logger) fs.FS {
+	if dir := os.Getenv("FRONTEND_DIR"); dir != "" {
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
+			logger.Error("FRONTEND_DIR is not a valid directory", "dir", dir, "error", err)
+			os.Exit(1)
+		}
+		logger.Info("serving frontend from directory", "dir", dir)
+		return os.DirFS(dir)
 	}
 
-	frontendFS := os.DirFS(buildDir)
+	sub, err := fs.Sub(frontend.BuildFS, "build")
+	if err != nil {
+		logger.Info("no embedded frontend build, skipping static file serving")
+		return nil
+	}
+
+	// Verify the embedded FS has content
+	if _, err := fs.Stat(sub, "index.html"); err != nil {
+		logger.Info("embedded frontend build has no index.html, skipping static file serving")
+		return nil
+	}
+
+	logger.Info("serving frontend from embedded build")
+	return sub
+}
+
+func serveFrontend(mux *http.ServeMux, frontendFS fs.FS) {
 	fileServer := http.FileServerFS(frontendFS)
 
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {

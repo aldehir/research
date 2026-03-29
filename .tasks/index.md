@@ -28,6 +28,7 @@
 - [x] 24 — Reduce ctrl+scroll zoom sensitivity `COMPLETE`
 - [x] 25 — Clean up frontend visual/UI tests `COMPLETE`
 - [x] 26 — Upload button in sidebar header and full-panel drop zone `COMPLETE`
-- [ ] 27 — Add syntax highlight support + copy button for code blocks `TODO`
+- [ ] 27 — Add syntax highlight support + copy button for code blocks `IN PROGRESS`
 - [ ] 28 — Dark mode PDF color inversion `COMPLETE`
-- [ ] 29 — Embed frontend build in Go binary `TODO`
+- [x] 29 — Embed frontend build in Go binary `COMPLETE`
+- [ ] 30 — Convert CSS colors to OKLCH `IN PROGRESS`
