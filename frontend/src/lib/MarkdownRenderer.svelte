@@ -7,9 +7,57 @@
 
 	let { content }: Props = $props();
 	let html = $derived(renderMarkdown(content));
+	let container: HTMLElement;
+
+	const COPY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+	const CHECK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+	function handleCopy(button: HTMLButtonElement, pre: HTMLPreElement) {
+		const code = pre.querySelector('code');
+		const text = code ? code.textContent ?? '' : pre.textContent ?? '';
+		navigator.clipboard.writeText(text).then(() => {
+			button.innerHTML = CHECK_ICON;
+			button.classList.add('copied');
+			setTimeout(() => {
+				button.innerHTML = COPY_ICON;
+				button.classList.remove('copied');
+			}, 1500);
+		});
+	}
+
+	$effect(() => {
+		// Re-run whenever html changes
+		void html;
+		if (!container) return;
+
+		// Clean up old buttons
+		container.querySelectorAll('.copy-btn').forEach(btn => btn.remove());
+
+		const pres = container.querySelectorAll('pre');
+		const cleanups: (() => void)[] = [];
+
+		for (const pre of pres) {
+			pre.style.position = 'relative';
+			const btn = document.createElement('button');
+			btn.className = 'copy-btn';
+			btn.type = 'button';
+			btn.innerHTML = COPY_ICON;
+			btn.title = 'Copy code';
+
+			const handler = () => handleCopy(btn, pre);
+			btn.addEventListener('click', handler);
+			cleanups.push(() => btn.removeEventListener('click', handler));
+
+			pre.appendChild(btn);
+		}
+
+		return () => {
+			cleanups.forEach(fn => fn());
+		};
+	});
 </script>
 
-<span class="markdown-content">{@html html}</span>
+<span class="markdown-content" bind:this={container}>{@html html}</span>
 
 <style>
 	.markdown-content {
@@ -63,6 +111,7 @@
 		margin: 0.5em 0;
 		font-size: 0.85em;
 		line-height: 1.5;
+		position: relative;
 	}
 
 	.markdown-content :global(pre code) {
@@ -71,6 +120,39 @@
 		border-radius: 0;
 		font-size: inherit;
 		color: inherit;
+	}
+
+	/* Copy button */
+	.markdown-content :global(.copy-btn) {
+		position: absolute;
+		top: 0.5em;
+		right: 0.5em;
+		background: transparent;
+		border: 1px solid var(--color-code-border);
+		border-radius: var(--radius-sm);
+		color: var(--color-code-text);
+		cursor: pointer;
+		padding: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0;
+		transition: opacity 0.15s, background 0.15s;
+		line-height: 1;
+	}
+
+	.markdown-content :global(pre:hover .copy-btn) {
+		opacity: 0.7;
+	}
+
+	.markdown-content :global(.copy-btn:hover) {
+		opacity: 1 !important;
+		background: var(--color-code-hover);
+	}
+
+	.markdown-content :global(.copy-btn.copied) {
+		opacity: 1 !important;
+		color: var(--color-code-string);
 	}
 
 	/* Blockquotes */
