@@ -22,3 +22,7 @@
 - [x] 18 — Add subpixel antialiasing to PDF rendering `COMPLETE`
 - [ ] 19 — Fix scaling when first page is smaller than others `COMPLETE`
 - [ ] 20 — URL-based paper routing `TODO`
+- [ ] 21 — Fix chat selection dropdown `IN PROGRESS`
+- [ ] 22 — Overlay delete icon in paper side menu `TODO`
+- [ ] 23 — Add resize handles to side panels in desktop view `TODO`
+- [x] 24 — Reduce ctrl+scroll zoom sensitivity `COMPLETE`

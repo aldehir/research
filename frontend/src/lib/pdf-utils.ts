@@ -29,7 +29,7 @@ export function formatZoom(scale: number): string {
 }
 
 export function zoomByDelta(scale: number, deltaY: number): number {
-	const factor = 1 - deltaY * 0.002;
+	const factor = 1 - deltaY * 0.0008;
 	return clampScale(scale * factor);
 }
 

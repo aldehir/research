@@ -191,4 +191,13 @@ describe('zoomByDelta', () => {
 	it('clamps to MAX_SCALE', () => {
 		expect(zoomByDelta(MAX_SCALE, -10000)).toBe(MAX_SCALE);
 	});
+
+	it('produces small increments per typical scroll tick', () => {
+		// A single mouse wheel tick is ~100 deltaY pixels.
+		// Zoom change should be ≤10% per tick for smooth feel.
+		const scrollDown = 1.0 - zoomByDelta(1.0, 100);
+		const scrollUp = zoomByDelta(1.0, -100) - 1.0;
+		expect(scrollDown).toBeLessThanOrEqual(0.1);
+		expect(scrollUp).toBeLessThanOrEqual(0.1);
+	});
 });
