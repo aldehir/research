@@ -259,10 +259,9 @@
 
 	/* Lua result block */
 	.markdown-content :global(.lua-result) {
-		background: var(--color-code-bg);
+		background: oklch(from var(--color-code-bg) calc(l + 0.03) c h);
 		color: var(--color-code-text);
-		border: 1px solid var(--color-code-border);
-		border-top: 1px solid var(--color-code-border);
+		border: none;
 		border-radius: 0 0 var(--radius) var(--radius);
 		padding: 0.5em 1em;
 		margin: 0 0 0.5em;
