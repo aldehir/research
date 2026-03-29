@@ -1492,6 +1492,75 @@ func TestSendMessage_PersistsSnapshotPageImage(t *testing.T) {
 	assert.NotEmpty(t, blocks[0].ContentParts[0].Source.Data)
 }
 
+func TestSendMessage_ReloadsPersistedAttachmentsInHistory(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	dataDir := t.TempDir()
+	storage := pdf.NewStorage(filepath.Join(dataDir, "papers"))
+
+	seedTestPaper(t, tdb)
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	// --- Turn 1: send message with attachment ---
+	mock1 := &mockStreamer{
+		events: []anthropic.StreamEvent{
+			{Type: "content_block_delta", Text: "I see a chart"},
+			{Type: "message_stop"},
+		},
+	}
+	mux1 := NewMux(tdb.DB, storage, mock1, nil, slog.Default(), WithDataDir(dataDir))
+
+	body1 := `{"content":"What is this?","attachments":[{"image_data":"iVBORw0KGgo=","text":"Figure 1","page":3}]}`
+	req1 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body1))
+	req1.Header.Set("Content-Type", "application/json")
+	rec1 := httptest.NewRecorder()
+	mux1.ServeHTTP(rec1, req1)
+	assert.Equal(t, http.StatusOK, rec1.Code)
+
+	// --- Turn 2: follow-up question (simulates page reload — no in-memory state) ---
+	mock2 := &captureStreamer{
+		mockStreamer: mockStreamer{
+			events: []anthropic.StreamEvent{
+				{Type: "content_block_delta", Text: "Yes, the chart shows..."},
+				{Type: "message_stop"},
+			},
+		},
+	}
+	mux2 := NewMux(tdb.DB, storage, mock2, nil, slog.Default(), WithDataDir(dataDir))
+
+	body2 := `{"content":"Can you still see the image?"}`
+	req2 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body2))
+	req2.Header.Set("Content-Type", "application/json")
+	rec2 := httptest.NewRecorder()
+	mux2.ServeHTTP(rec2, req2)
+	assert.Equal(t, http.StatusOK, rec2.Code)
+
+	// Verify the second request included the image from the first turn
+	require.NotNil(t, mock2.captured)
+	msgs := mock2.captured.Messages
+
+	// The first user message should have content blocks with an image
+	firstMsg := msgs[0]
+	assert.Equal(t, "user", firstMsg.Role)
+	require.NotEmpty(t, firstMsg.ContentBlocks, "first user message should have content blocks with image from persisted attachment")
+
+	var hasImage bool
+	for _, b := range firstMsg.ContentBlocks {
+		if b.Type == "image" && b.Source != nil {
+			hasImage = true
+			assert.Equal(t, "image/png", b.Source.MediaType)
+			assert.NotEmpty(t, b.Source.Data)
+		}
+	}
+	assert.True(t, hasImage, "first user message should include the persisted attachment image")
+}
+
 func TestSendMessage_PersistsAttachments(t *testing.T) {
 	tdb := store.NewTestDB(t)
 	dataDir := t.TempDir()

@@ -25,6 +25,12 @@ type ChatStreamer interface {
 	Stream(ctx context.Context, req anthropic.Request) (<-chan anthropic.StreamEvent, error)
 }
 
+type attachment struct {
+	ImageData string `json:"image_data"`
+	Text      string `json:"text"`
+	Page      int    `json:"page"`
+}
+
 const maxToolLoopIterations = 10
 
 func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, dataDir string, logger *slog.Logger) http.HandlerFunc {
@@ -39,11 +45,6 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 		}
 
 		// Parse request body
-		type attachment struct {
-			ImageData string `json:"image_data"`
-			Text      string `json:"text"`
-			Page      int    `json:"page"`
-		}
 		var body struct {
 			Content     string       `json:"content"`
 			CurrentPage int          `json:"current_page"`
@@ -138,6 +139,13 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 			return
 		}
 
+		// Load persisted attachments for the chat, grouped by message ID
+		chatAtts, _ := store.ListAttachmentsByChat(db, chatID)
+		attsByMsg := make(map[string][]store.Attachment)
+		for _, a := range chatAtts {
+			attsByMsg[a.MessageID] = append(attsByMsg[a.MessageID], a)
+		}
+
 		// Convert to anthropic messages, appending viewer context to the latest user message
 		var anthropicMessages []anthropic.Message
 		for _, m := range messages {
@@ -157,44 +165,27 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, data
 			if m.Role == "user" && m.ID == userMsg.ID {
 				content = appendViewerContext(content, body.CurrentPage)
 
-				// Build multimodal message if attachments are present
+				// Build multimodal message if attachments are present (current turn)
 				if len(body.Attachments) > 0 {
-					var blocks []anthropic.ContentBlock
-
-					// Build combined text: user message + attachment text
-					var textContent strings.Builder
-					textContent.WriteString(content)
-					for _, att := range body.Attachments {
-						if att.Text != "" {
-							textContent.WriteString(fmt.Sprintf("\n\n[Attached region from page %d]\n%s", att.Page, att.Text))
-						}
-					}
-					blocks = append(blocks, anthropic.ContentBlock{
-						Type: "text",
-						Text: textContent.String(),
-					})
-
-					// Add image blocks
-					for _, att := range body.Attachments {
-						if att.ImageData != "" {
-							blocks = append(blocks, anthropic.ContentBlock{
-								Type: "image",
-								Source: &anthropic.ImageSource{
-									Type:      "base64",
-									MediaType: "image/png",
-									Data:      att.ImageData,
-								},
-							})
-						}
-					}
-
-					anthropicMessages = append(anthropicMessages, anthropic.Message{
-						Role:          m.Role,
-						ContentBlocks: blocks,
-					})
+					anthropicMessages = append(anthropicMessages, buildMultimodalUserMessage(content, body.Attachments))
 					continue
 				}
 			}
+
+			// Reconstruct multimodal message from persisted attachments (past turns)
+			if m.Role == "user" && m.ID != userMsg.ID {
+				if persistedAtts, ok := attsByMsg[m.ID]; ok && len(persistedAtts) > 0 {
+					blocks, err := buildBlocksFromPersistedAttachments(content, persistedAtts, logger)
+					if err == nil {
+						anthropicMessages = append(anthropicMessages, anthropic.Message{
+							Role:          m.Role,
+							ContentBlocks: blocks,
+						})
+						continue
+					}
+				}
+			}
+
 			anthropicMessages = append(anthropicMessages, anthropic.Message{
 				Role:    m.Role,
 				Content: content,
@@ -411,6 +402,73 @@ func persistContentBlocks(db *sql.DB, chatID, role string, blocks []anthropic.Co
 	if err := store.CreateMessage(db, msg); err != nil {
 		logger.Error("failed to persist tool message", "role", role, "error", err)
 	}
+}
+
+// buildMultimodalUserMessage creates an anthropic message with text and image blocks from request attachments.
+func buildMultimodalUserMessage(content string, attachments []attachment) anthropic.Message {
+	var blocks []anthropic.ContentBlock
+
+	var textContent strings.Builder
+	textContent.WriteString(content)
+	for _, att := range attachments {
+		if att.Text != "" {
+			textContent.WriteString(fmt.Sprintf("\n\n[Attached region from page %d]\n%s", att.Page, att.Text))
+		}
+	}
+	blocks = append(blocks, anthropic.ContentBlock{
+		Type: "text",
+		Text: textContent.String(),
+	})
+
+	for _, att := range attachments {
+		if att.ImageData != "" {
+			blocks = append(blocks, anthropic.ContentBlock{
+				Type: "image",
+				Source: &anthropic.ImageSource{
+					Type:      "base64",
+					MediaType: "image/png",
+					Data:      att.ImageData,
+				},
+			})
+		}
+	}
+
+	return anthropic.Message{Role: "user", ContentBlocks: blocks}
+}
+
+// buildBlocksFromPersistedAttachments reads images from disk and builds content blocks for a past user message.
+func buildBlocksFromPersistedAttachments(content string, atts []store.Attachment, logger *slog.Logger) ([]anthropic.ContentBlock, error) {
+	var blocks []anthropic.ContentBlock
+
+	var textContent strings.Builder
+	textContent.WriteString(content)
+	for _, att := range atts {
+		if att.Text != "" {
+			textContent.WriteString(fmt.Sprintf("\n\n[Attached region from page %d]\n%s", att.Page, att.Text))
+		}
+	}
+	blocks = append(blocks, anthropic.ContentBlock{
+		Type: "text",
+		Text: textContent.String(),
+	})
+
+	for _, att := range atts {
+		imgBytes, err := os.ReadFile(att.FilePath)
+		if err != nil {
+			logger.Warn("failed to read persisted attachment image", "id", att.ID, "path", att.FilePath, "error", err)
+			continue
+		}
+		blocks = append(blocks, anthropic.ContentBlock{
+			Type: "image",
+			Source: &anthropic.ImageSource{
+				Type:      "base64",
+				MediaType: "image/png",
+				Data:      base64.StdEncoding.EncodeToString(imgBytes),
+			},
+		})
+	}
+
+	return blocks, nil
 }
 
 type sseResponse struct {
