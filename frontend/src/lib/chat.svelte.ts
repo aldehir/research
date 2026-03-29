@@ -31,21 +31,39 @@ export async function loadSessions(paperId: string): Promise<void> {
 	}
 }
 
+function isDraft(id: string): boolean {
+	return id.startsWith('draft-');
+}
+
 export async function createSession(paperId: string): Promise<void> {
-	const session = await createChatSession(paperId);
+	const existingDraft = sessions.find(s => isDraft(s.id));
+	if (existingDraft) {
+		activeSessionId = existingDraft.id;
+		messages = [];
+		return;
+	}
+	const session: ChatSession = {
+		id: `draft-${generateId()}`,
+		paper_id: paperId,
+		title: 'New Chat',
+		created_at: new Date().toISOString()
+	};
 	sessions = [session, ...sessions];
 	activeSessionId = session.id;
 	messages = [];
 }
 
 export async function selectSession(paperId: string, chatId: string): Promise<void> {
+	sessions = sessions.filter(s => !isDraft(s.id));
 	activeSessionId = chatId;
 	const session = await getChatSession(paperId, chatId);
 	messages = session.messages;
 }
 
 export async function deleteSession(paperId: string, chatId: string): Promise<void> {
-	await deleteChatSession(paperId, chatId);
+	if (!isDraft(chatId)) {
+		await deleteChatSession(paperId, chatId);
+	}
 	sessions = sessions.filter(s => s.id !== chatId);
 	if (activeSessionId === chatId) {
 		activeSessionId = null;
@@ -78,9 +96,18 @@ export async function sendChatMessage(
 	currentPage?: number,
 	attachments?: MessageAttachment[]
 ): Promise<void> {
+	let resolvedChatId = chatId;
+
+	if (isDraft(chatId)) {
+		const created = await createChatSession(paperId);
+		resolvedChatId = created.id;
+		sessions = sessions.map(s => s.id === chatId ? created : s);
+		activeSessionId = resolvedChatId;
+	}
+
 	const userMessage: Message = {
 		id: generateId(),
-		chat_session_id: chatId,
+		chat_session_id: resolvedChatId,
 		role: 'user',
 		content,
 		created_at: new Date().toISOString()
@@ -95,7 +122,7 @@ export async function sendChatMessage(
 
 	await sendMessage(
 		paperId,
-		chatId,
+		resolvedChatId,
 		content,
 		(text: string) => {
 			streamingContent += text;
@@ -104,7 +131,7 @@ export async function sendChatMessage(
 		() => {
 			const assistantMessage: Message = {
 				id: generateId(),
-				chat_session_id: chatId,
+				chat_session_id: resolvedChatId,
 				role: 'assistant',
 				content: streamingContent,
 				created_at: new Date().toISOString()

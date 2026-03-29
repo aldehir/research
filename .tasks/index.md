@@ -51,3 +51,5 @@
 - [ ] 47 — Abstract LLM provider with OpenAI-compatible alternative `TODO`
 - [x] 48 — Lua interpreter with eval endpoint `COMPLETE`
 - [x] 49 — Region selection to attach PDF excerpt to chat `COMPLETE`
+- [x] 50 — Defer chat persistence until first message `COMPLETE`
+- [ ] 51 — Persist chat images to disk and recall on conversation load `TODO`
