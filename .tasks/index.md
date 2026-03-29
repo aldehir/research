@@ -33,3 +33,4 @@
 - [x] 29 — Embed frontend build in Go binary `COMPLETE`
 - [x] 30 — Convert CSS colors to OKLCH `COMPLETE`
 - [x] 31 — Add CLI parsing with cobra, rename binary to research-server `COMPLETE`
+- [x] 32 — Shift theme hues from blue to purple `COMPLETE`
