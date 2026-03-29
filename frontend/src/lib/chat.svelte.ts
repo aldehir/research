@@ -21,6 +21,8 @@ let streamSegments = $state<StreamSegment[]>([]);
 let messageSegments = $state(new Map<string, StreamSegment[]>());
 let messageAttachments = $state(new Map<string, MessageAttachment[]>());
 let isStreaming = $state(false);
+let activeStreamChatId: string | null = null;
+let activeStreamAbort: AbortController | null = null;
 let toolCallHandler = $state<((tool: ToolCall) => void) | null>(null);
 
 export async function loadSessions(paperId: string): Promise<void> {
@@ -54,6 +56,14 @@ export async function createSession(paperId: string): Promise<void> {
 }
 
 export async function selectSession(paperId: string, chatId: string): Promise<void> {
+	if (activeStreamAbort) {
+		activeStreamAbort.abort();
+		activeStreamAbort = null;
+		activeStreamChatId = null;
+		streamingContent = '';
+		streamSegments = [];
+		isStreaming = false;
+	}
 	sessions = sessions.filter(s => !isDraft(s.id));
 	activeSessionId = chatId;
 	const session = await getChatSession(paperId, chatId);
@@ -116,19 +126,27 @@ export async function sendChatMessage(
 	if (attachments && attachments.length > 0) {
 		messageAttachments = new Map(messageAttachments).set(userMessage.id, attachments);
 	}
+	const abortController = new AbortController();
+	activeStreamChatId = resolvedChatId;
+	activeStreamAbort = abortController;
 	isStreaming = true;
 	streamingContent = '';
 	streamSegments = [];
+
+	const streamChatId = resolvedChatId;
+	const isStale = () => activeStreamChatId !== streamChatId;
 
 	await sendMessage(
 		paperId,
 		resolvedChatId,
 		content,
 		(text: string) => {
+			if (isStale()) return;
 			streamingContent += text;
 			appendTextDelta(text);
 		},
 		() => {
+			if (isStale()) return;
 			const assistantMessage: Message = {
 				id: generateId(),
 				chat_session_id: resolvedChatId,
@@ -144,15 +162,21 @@ export async function sendChatMessage(
 			streamingContent = '';
 			streamSegments = [];
 			isStreaming = false;
+			activeStreamChatId = null;
+			activeStreamAbort = null;
 		},
 		(error: string) => {
+			if (isStale()) return;
 			console.error('Chat error:', error);
 			streamingContent = '';
 			streamSegments = [];
 			isStreaming = false;
+			activeStreamChatId = null;
+			activeStreamAbort = null;
 		},
 		currentPage,
 		(tool: ToolCall) => {
+			if (isStale()) return;
 			streamSegments.push({
 				type: 'tool',
 				name: tool.name,
@@ -166,6 +190,7 @@ export async function sendChatMessage(
 			}
 		},
 		(result: ToolResult) => {
+			if (isStale()) return;
 			for (let i = streamSegments.length - 1; i >= 0; i--) {
 				const seg = streamSegments[i];
 				if (seg.type === 'tool' && seg.name === result.name && !seg.result) {
@@ -174,11 +199,17 @@ export async function sendChatMessage(
 				}
 			}
 		},
-		attachments
+		attachments,
+		abortController.signal
 	);
 }
 
 export function resetChat(): void {
+	if (activeStreamAbort) {
+		activeStreamAbort.abort();
+		activeStreamAbort = null;
+		activeStreamChatId = null;
+	}
 	sessions = [];
 	activeSessionId = null;
 	messages = [];

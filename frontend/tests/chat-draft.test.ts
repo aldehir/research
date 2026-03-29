@@ -103,7 +103,8 @@ describe('draft session promotion on first message', () => {
 			undefined,
 			expect.any(Function),
 			expect.any(Function),
-			undefined
+			undefined,
+			expect.any(AbortSignal)
 		);
 	});
 

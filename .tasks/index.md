@@ -53,3 +53,4 @@
 - [x] 49 — Region selection to attach PDF excerpt to chat `COMPLETE`
 - [x] 50 — Defer chat persistence until first message `COMPLETE`
 - [ ] 51 — Persist chat images to disk and recall on conversation load `TODO`
+- [x] 52 — Fix chat message cross-contamination when switching sessions `COMPLETE`

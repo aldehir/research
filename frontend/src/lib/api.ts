@@ -177,7 +177,8 @@ export async function sendMessage(
 	currentPage?: number,
 	onToolCall?: (tool: ToolCall) => void,
 	onToolResult?: (result: ToolResult) => void,
-	attachments?: MessageAttachment[]
+	attachments?: MessageAttachment[],
+	signal?: AbortSignal
 ): Promise<void> {
 	const reqBody: Record<string, unknown> = { content };
 	if (currentPage) {
@@ -192,9 +193,11 @@ export async function sendMessage(
 		response = await fetch(`/api/papers/${paperId}/chats/${chatId}/messages`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(reqBody)
+			body: JSON.stringify(reqBody),
+			signal
 		});
 	} catch (err) {
+		if (signal?.aborted) return;
 		onError(err instanceof Error ? err.message : 'Network error');
 		return;
 	}
@@ -248,6 +251,7 @@ export async function sendMessage(
 		}
 		onDone();
 	} catch (err) {
+		if (signal?.aborted) return;
 		onError(err instanceof Error ? err.message : 'Stream error');
 	}
 }
