@@ -125,19 +125,11 @@
 		justify-content: center;
 		padding: 0 0.5rem;
 		border: none;
-		background: linear-gradient(to right, transparent, var(--color-bg) 40%);
+		background: none;
 		cursor: pointer;
 		color: var(--color-text-tertiary);
 		line-height: 1;
 		z-index: 1;
-	}
-
-	li:has(.paper-item:hover) .delete-btn {
-		background: linear-gradient(to right, transparent, var(--color-surface-hover) 40%);
-	}
-
-	li:has(.paper-item.selected) .delete-btn {
-		background: linear-gradient(to right, transparent, var(--color-surface-active) 40%);
 	}
 
 	.delete-btn:hover {
