@@ -47,3 +47,4 @@
 - [x] 43 — Improve resize handles for touch devices `COMPLETE`
 - [x] 44 — Fix horizontal panning when zoomed in `COMPLETE`
 - [x] 45 — iPad fullscreen mode and overscroll bounce fix `COMPLETE`
+- [x] 46 — Custom system prompt for research/textbook assistant `COMPLETE`
