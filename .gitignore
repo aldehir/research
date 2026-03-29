@@ -1,5 +1,6 @@
 # Go
 /server
+/research-server
 
 # Frontend
 frontend/node_modules/
