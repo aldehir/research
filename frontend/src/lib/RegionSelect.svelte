@@ -21,6 +21,8 @@
 	let rectW = $state(0);
 	let rectH = $state(0);
 
+	let overlayEl: HTMLDivElement | undefined = $state();
+
 	// Find which page element contains the given client coordinates
 	function findPage(clientX: number, clientY: number): { pageNum: number; el: HTMLDivElement } | null {
 		for (const [pageNum, el] of pageElements) {
@@ -31,6 +33,13 @@
 			}
 		}
 		return null;
+	}
+
+	// Convert client coords to overlay-local coords (viewport-relative)
+	function toOverlay(clientX: number, clientY: number): { x: number; y: number } {
+		if (!overlayEl) return { x: 0, y: 0 };
+		const rect = overlayEl.getBoundingClientRect();
+		return { x: clientX - rect.left, y: clientY - rect.top };
 	}
 
 	let activePage: { pageNum: number; el: HTMLDivElement } | null = null;
@@ -44,9 +53,9 @@
 		activePage = page;
 		selecting = true;
 
-		const containerRect = pagesContainer.getBoundingClientRect();
-		startX = e.clientX - containerRect.left + pagesContainer.scrollLeft;
-		startY = e.clientY - containerRect.top + pagesContainer.scrollTop;
+		const pos = toOverlay(e.clientX, e.clientY);
+		startX = pos.x;
+		startY = pos.y;
 		currentX = startX;
 		currentY = startY;
 		updateRect();
@@ -56,9 +65,9 @@
 		if (!selecting) return;
 		e.preventDefault();
 
-		const containerRect = pagesContainer.getBoundingClientRect();
-		currentX = e.clientX - containerRect.left + pagesContainer.scrollLeft;
-		currentY = e.clientY - containerRect.top + pagesContainer.scrollTop;
+		const pos = toOverlay(e.clientX, e.clientY);
+		currentX = pos.x;
+		currentY = pos.y;
 		updateRect();
 	}
 
@@ -73,14 +82,20 @@
 			return;
 		}
 
-		// Convert overlay coordinates to page-relative PDF points
+		// Convert viewport-relative rect to page-relative PDF points.
+		// The page element's getBoundingClientRect gives viewport coords,
+		// and the overlay's rect also uses viewport coords, so we can
+		// subtract directly.
+		const overlayRect = overlayEl!.getBoundingClientRect();
 		const pageRect = activePage.el.getBoundingClientRect();
-		const containerRect = pagesContainer.getBoundingClientRect();
-		const pageOffsetX = pageRect.left - containerRect.left + pagesContainer.scrollLeft;
-		const pageOffsetY = pageRect.top - containerRect.top + pagesContainer.scrollTop;
 
-		const relX = rectX - pageOffsetX;
-		const relY = rectY - pageOffsetY;
+		// Rect position in viewport coords
+		const rectViewX = overlayRect.left + rectX;
+		const rectViewY = overlayRect.top + rectY;
+
+		// Position relative to the page element
+		const relX = rectViewX - pageRect.left;
+		const relY = rectViewY - pageRect.top;
 
 		const pdfScale = PDF_TO_CSS_UNITS * scale;
 		const pdfX = Math.max(0, Math.round(relX / pdfScale));
@@ -120,6 +135,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="region-select-overlay"
+	bind:this={overlayEl}
 	onpointerdown={handlePointerDown}
 	onpointermove={handlePointerMove}
 	onpointerup={handlePointerUp}
