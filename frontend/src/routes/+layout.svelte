@@ -14,7 +14,7 @@
 		toggleChat,
 		closePanel
 	} from '$lib/mobile-layout.svelte';
-	import { getTheme, setTheme, initTheme } from '$lib/theme.svelte';
+	import { getTheme, toggleTheme, initTheme } from '$lib/theme.svelte';
 	import {
 		getSidebarWidth,
 		getChatWidth,
@@ -98,9 +98,7 @@
 		handleChatResize(delta, getLayoutWidth());
 	}
 
-	function cycleTheme() {
-		setTheme(getTheme() === 'light' ? 'dark' : 'light');
-	}
+	const currentTheme = $derived(getTheme());
 
 	$effect(() => {
 		untrack(() => {
@@ -133,11 +131,11 @@
 		<div class="header-actions">
 			<button
 				class="theme-toggle"
-				onclick={cycleTheme}
+				onclick={toggleTheme}
 				aria-label="Toggle theme"
 				title="Toggle theme"
 			>
-				{#if getTheme() === 'light'}
+				{#if currentTheme === 'light'}
 					<Icon d={Sun} size={18} />
 				{:else}
 					<Icon d={Moon} size={18} />

@@ -15,6 +15,10 @@ export function setTheme(t: Theme): void {
 	applyTheme(t);
 }
 
+export function toggleTheme(): void {
+	setTheme(theme === 'light' ? 'dark' : 'light');
+}
+
 export function getResolvedTheme(): 'light' | 'dark' {
 	return theme;
 }

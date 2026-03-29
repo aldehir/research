@@ -59,6 +59,37 @@ describe('theme store', () => {
 		});
 	});
 
+	describe('toggleTheme', () => {
+		it('toggles from light to dark on a single call', async () => {
+			const { toggleTheme } = await import('$lib/theme.svelte');
+			initTheme();
+			expect(getTheme()).toBe('light');
+			toggleTheme();
+			expect(getTheme()).toBe('dark');
+			expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+		});
+
+		it('toggles from dark to light on a single call', async () => {
+			const { toggleTheme } = await import('$lib/theme.svelte');
+			initTheme();
+			setTheme('dark');
+			expect(getTheme()).toBe('dark');
+			toggleTheme();
+			expect(getTheme()).toBe('light');
+			expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+		});
+
+		it('round-trips correctly', async () => {
+			const { toggleTheme } = await import('$lib/theme.svelte');
+			initTheme();
+			expect(getTheme()).toBe('light');
+			toggleTheme();
+			expect(getTheme()).toBe('dark');
+			toggleTheme();
+			expect(getTheme()).toBe('light');
+		});
+	});
+
 	describe('getResolvedTheme', () => {
 		it('returns light when theme is light', () => {
 			initTheme();
