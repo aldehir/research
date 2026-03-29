@@ -43,19 +43,21 @@
 			resultEl.className = 'lua-result';
 			pre.parentNode!.insertBefore(resultEl, pre.nextSibling);
 		}
-		resultEl.textContent = 'Running...';
+		resultEl.innerHTML = '<span class="lua-result-label">Output</span>\n<span class="lua-result-body">Running...</span>';
 		resultEl.classList.remove('lua-error');
 
 		try {
 			const result = await evalLua(text);
+			const body = resultEl.querySelector('.lua-result-body')!;
 			if (result.error) {
-				resultEl.textContent = result.error;
+				body.textContent = result.error;
 				resultEl.classList.add('lua-error');
 			} else {
-				resultEl.textContent = result.output || '(no output)';
+				body.textContent = result.output || '(no output)';
 			}
 		} catch (err) {
-			resultEl.textContent = err instanceof Error ? err.message : 'Eval failed';
+			const body = resultEl.querySelector('.lua-result-body')!;
+			body.textContent = err instanceof Error ? err.message : 'Eval failed';
 			resultEl.classList.add('lua-error');
 		} finally {
 			button.innerHTML = PLAY_ICON;
@@ -249,15 +251,21 @@
 		animation: lua-spin 0.8s linear infinite;
 	}
 
+	/* Code block followed by Lua result: remove gap and bottom radius */
+	.markdown-content :global(pre:has(+ .lua-result)) {
+		margin-bottom: 0;
+		border-radius: var(--radius) var(--radius) 0 0;
+	}
+
 	/* Lua result block */
 	.markdown-content :global(.lua-result) {
 		background: var(--color-code-bg);
 		color: var(--color-code-text);
 		border: 1px solid var(--color-code-border);
-		border-top: none;
+		border-top: 1px solid var(--color-code-border);
 		border-radius: 0 0 var(--radius) var(--radius);
 		padding: 0.5em 1em;
-		margin: -0.5em 0 0.5em;
+		margin: 0 0 0.5em;
 		font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
 		font-size: 0.85em;
 		line-height: 1.5;
@@ -265,7 +273,14 @@
 		word-break: break-word;
 	}
 
-	.markdown-content :global(.lua-result.lua-error) {
+	.markdown-content :global(.lua-result-label) {
+		font-size: 0.75em;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		opacity: 0.5;
+	}
+
+	.markdown-content :global(.lua-result.lua-error .lua-result-body) {
 		color: var(--color-danger);
 	}
 
