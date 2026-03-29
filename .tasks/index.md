@@ -44,3 +44,5 @@
 - [x] 40 — Match textarea and send button height in chat input `COMPLETE`
 - [x] 41 — Fix theme toggle requiring double click `COMPLETE`
 - [x] 42 — Reduce saturation of purple colors in dark theme `COMPLETE`
+- [x] 43 — Improve resize handles for touch devices `COMPLETE`
+- [x] 44 — Fix horizontal panning when zoomed in `COMPLETE`

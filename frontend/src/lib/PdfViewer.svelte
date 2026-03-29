@@ -695,7 +695,7 @@
 		background: var(--color-pages-bg);
 		display: flex;
 		flex-direction: column;
-		align-items: center;
+		align-items: flex-start;
 		gap: 8px;
 		padding: 8px;
 	}
@@ -704,6 +704,7 @@
 		background: white;
 		box-shadow: 0 2px 8px var(--color-shadow);
 		flex-shrink: 0;
+		margin-inline: auto;
 	}
 
 	:global([data-theme="dark"]) .page-wrapper {
