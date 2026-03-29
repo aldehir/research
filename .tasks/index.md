@@ -42,3 +42,5 @@
 - [x] 38 — Remove attach selection from UI and backend `COMPLETE`
 - [ ] 39 — Light theme for ToC panel `IN PROGRESS`
 - [x] 40 — Match textarea and send button height in chat input `COMPLETE`
+- [ ] 41 — Fix theme toggle requiring double click `IN PROGRESS`
+- [x] 42 — Reduce saturation of purple colors in dark theme `COMPLETE`
