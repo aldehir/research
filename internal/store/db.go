@@ -101,4 +101,13 @@ var migrations = []string{
 		INSERT INTO paper_pages_fts(paper_pages_fts, rowid, text_content) VALUES ('delete', old.rowid, old.text_content);
 		INSERT INTO paper_pages_fts(rowid, text_content) VALUES (new.rowid, new.text_content);
 	END`,
+	`ALTER TABLE messages ADD COLUMN content_blocks TEXT`,
+	`CREATE TABLE IF NOT EXISTS message_attachments (
+		id TEXT PRIMARY KEY,
+		message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+		file_path TEXT NOT NULL,
+		text TEXT NOT NULL DEFAULT '',
+		page INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL
+	)`,
 }

@@ -410,6 +410,97 @@ func TestContentBlock_TextToolResultMarshaling(t *testing.T) {
 	assert.Equal(t, "Page text here", content)
 }
 
+func TestContentBlock_UnmarshalJSON(t *testing.T) {
+	t.Run("round-trips tool_use block", func(t *testing.T) {
+		original := ContentBlock{
+			Type:  "tool_use",
+			ID:    "toolu_abc",
+			Name:  "search_pdf",
+			Input: json.RawMessage(`{"query":"attention"}`),
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+
+		var got ContentBlock
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, "tool_use", got.Type)
+		assert.Equal(t, "toolu_abc", got.ID)
+		assert.Equal(t, "search_pdf", got.Name)
+		assert.JSONEq(t, `{"query":"attention"}`, string(got.Input))
+	})
+
+	t.Run("round-trips text tool_result block", func(t *testing.T) {
+		original := ContentBlock{
+			Type:      "tool_result",
+			ToolUseID: "toolu_abc",
+			Content:   "Page text here",
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+
+		var got ContentBlock
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, "tool_result", got.Type)
+		assert.Equal(t, "toolu_abc", got.ToolUseID)
+		assert.Equal(t, "Page text here", got.Content)
+	})
+
+	t.Run("round-trips image tool_result block", func(t *testing.T) {
+		original := ContentBlock{
+			Type:      "tool_result",
+			ToolUseID: "toolu_img",
+			ContentParts: []ContentPart{
+				{Type: "image", Source: &ImageSource{
+					Type:      "base64",
+					MediaType: "image/png",
+					Data:      "iVBORw0KGgo=",
+				}},
+			},
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+
+		var got ContentBlock
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, "tool_result", got.Type)
+		assert.Equal(t, "toolu_img", got.ToolUseID)
+		require.Len(t, got.ContentParts, 1)
+		assert.Equal(t, "image", got.ContentParts[0].Type)
+		require.NotNil(t, got.ContentParts[0].Source)
+		assert.Equal(t, "image/png", got.ContentParts[0].Source.MediaType)
+	})
+
+	t.Run("round-trips text block", func(t *testing.T) {
+		original := ContentBlock{Type: "text", Text: "Hello world"}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+
+		var got ContentBlock
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, "text", got.Type)
+		assert.Equal(t, "Hello world", got.Text)
+	})
+
+	t.Run("round-trips image block", func(t *testing.T) {
+		original := ContentBlock{
+			Type: "image",
+			Source: &ImageSource{
+				Type:      "base64",
+				MediaType: "image/png",
+				Data:      "iVBORw0KGgo=",
+			},
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+
+		var got ContentBlock
+		require.NoError(t, json.Unmarshal(data, &got))
+		assert.Equal(t, "image", got.Type)
+		require.NotNil(t, got.Source)
+		assert.Equal(t, "image/png", got.Source.MediaType)
+	})
+}
+
 func TestPDFTools_HasExpectedTools(t *testing.T) {
 	tools := PDFTools()
 	names := make([]string, len(tools))

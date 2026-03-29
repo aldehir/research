@@ -68,12 +68,19 @@ export interface ChatSession {
 	created_at: string;
 }
 
+export interface PersistedAttachment {
+	id: string;
+	text: string;
+	page: number;
+}
+
 export interface Message {
 	id: string;
 	chat_session_id: string;
 	role: 'user' | 'assistant';
 	content: string;
 	created_at: string;
+	attachments?: PersistedAttachment[];
 }
 
 export interface ChatSessionWithMessages extends ChatSession {
@@ -111,6 +118,10 @@ export async function deleteChatSession(paperId: string, chatId: string): Promis
 		const body = await response.json() as { error: string };
 		throw new Error(body.error);
 	}
+}
+
+export function getAttachmentImageUrl(id: string): string {
+	return `/api/attachments/${id}/image`;
 }
 
 export interface RegionResult {

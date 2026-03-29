@@ -2,6 +2,7 @@
 	import { getMessages, getStreamSegments, getStreamingContent, getIsStreaming, getMessageSegments, getUserAttachments } from '$lib/chat.svelte';
 	import type { StreamSegment } from '$lib/chat.svelte';
 	import { formatToolLabel, formatToolArgs } from '$lib/tool-display';
+	import { getAttachmentImageUrl } from '$lib/api';
 	import MarkdownRenderer from '$lib/MarkdownRenderer.svelte';
 	import { tick } from 'svelte';
 	import { Icon, ChevronDown, ChevronRight } from '$lib/icons';
@@ -126,6 +127,12 @@
 							<div class="user-attachments">
 								{#each getUserAttachments(message.id)! as att}
 									<img class="user-attachment-img" src="data:image/png;base64,{att.image_data}" alt="Attached region from page {att.page}" />
+								{/each}
+							</div>
+						{:else if message.attachments && message.attachments.length > 0}
+							<div class="user-attachments">
+								{#each message.attachments as att}
+									<img class="user-attachment-img" src={getAttachmentImageUrl(att.id)} alt="Attached region from page {att.page}" />
 								{/each}
 							</div>
 						{/if}

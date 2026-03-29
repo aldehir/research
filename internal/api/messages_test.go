@@ -1201,6 +1201,441 @@ func TestSendMessage_WithAttachments(t *testing.T) {
 	})
 }
 
+func TestSendMessage_PersistsToolInteractions(t *testing.T) {
+	t.Run("tool_use and tool_result messages are persisted to DB", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  "/test.pdf",
+			FileSize:  1000,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "Done navigating"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+
+		body := `{"content":"Go to page 3"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Check persisted messages
+		messages, err := store.ListMessages(tdb.DB, "chat-1")
+		require.NoError(t, err)
+
+		// Should have: user msg, assistant tool_use, user tool_result, assistant final text
+		require.GreaterOrEqual(t, len(messages), 4, "should persist tool interaction messages")
+
+		// First: user message
+		assert.Equal(t, "user", messages[0].Role)
+		assert.Equal(t, "Go to page 3", messages[0].Content)
+
+		// Second: assistant with tool_use content blocks
+		assert.Equal(t, "assistant", messages[1].Role)
+		require.NotNil(t, messages[1].ContentBlocks, "assistant tool_use message should have content_blocks")
+		assert.Contains(t, *messages[1].ContentBlocks, "tool_use")
+		assert.Contains(t, *messages[1].ContentBlocks, "toolu_1")
+
+		// Third: user with tool_result content blocks
+		assert.Equal(t, "user", messages[2].Role)
+		require.NotNil(t, messages[2].ContentBlocks, "user tool_result message should have content_blocks")
+		assert.Contains(t, *messages[2].ContentBlocks, "tool_result")
+
+		// Fourth: final assistant text
+		assert.Equal(t, "assistant", messages[3].Role)
+		assert.Equal(t, "Done navigating", messages[3].Content)
+	})
+
+	t.Run("persisted tool messages are reconstructed for next turn", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  "/test.pdf",
+			FileSize:  1000,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		// --- Turn 1: tool call ---
+		mock1 := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":3}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "Navigated"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux1 := NewMux(tdb.DB, storage, mock1, nil, slog.Default())
+
+		body1 := `{"content":"Go to page 3"}`
+		req1 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body1))
+		req1.Header.Set("Content-Type", "application/json")
+		rec1 := httptest.NewRecorder()
+		mux1.ServeHTTP(rec1, req1)
+		assert.Equal(t, http.StatusOK, rec1.Code)
+
+		// --- Turn 2: follow-up question ---
+		mock2 := &captureStreamer{
+			mockStreamer: mockStreamer{
+				events: []anthropic.StreamEvent{
+					{Type: "content_block_delta", Text: "Yes"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+		mux2 := NewMux(tdb.DB, storage, mock2, nil, slog.Default())
+
+		body2 := `{"content":"What did you find?"}`
+		req2 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body2))
+		req2.Header.Set("Content-Type", "application/json")
+		rec2 := httptest.NewRecorder()
+		mux2.ServeHTTP(rec2, req2)
+		assert.Equal(t, http.StatusOK, rec2.Code)
+
+		// Verify the second request's messages include tool interactions
+		require.NotNil(t, mock2.captured)
+		msgs := mock2.captured.Messages
+		// Should have: user, assistant(tool_use), user(tool_result), assistant(text), user
+		require.GreaterOrEqual(t, len(msgs), 5, "history should include tool interaction messages")
+
+		// Find the assistant message with tool_use blocks
+		var hasToolUseMsg, hasToolResultMsg bool
+		for _, m := range msgs {
+			for _, b := range m.ContentBlocks {
+				if b.Type == "tool_use" {
+					hasToolUseMsg = true
+				}
+				if b.Type == "tool_result" {
+					hasToolResultMsg = true
+				}
+			}
+		}
+		assert.True(t, hasToolUseMsg, "history should contain tool_use message")
+		assert.True(t, hasToolResultMsg, "history should contain tool_result message")
+	})
+
+	t.Run("no duplicate final message when tools were used", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		storage := pdf.NewStorage(t.TempDir())
+
+		p := store.Paper{
+			ID:        "paper-1",
+			Title:     "Test Paper",
+			FilePath:  "/test.pdf",
+			FileSize:  1000,
+			CreatedAt: "2026-03-28T00:00:00Z",
+		}
+		require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+		session := store.ChatSession{
+			ID:        "chat-1",
+			PaperID:   "paper-1",
+			Title:     "Test Chat",
+			CreatedAt: "2026-03-28T10:00:00Z",
+		}
+		require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+		// Tool loop with final text
+		mock := &multiTurnStreamer{
+			calls: [][]anthropic.StreamEvent{
+				{
+					{Type: "tool_use", ToolUseID: "toolu_1", ToolName: "go_to_page", ToolInput: `{"page":1}`},
+					{Type: "message_stop"},
+				},
+				{
+					{Type: "content_block_delta", Text: "Here is page 1"},
+					{Type: "message_stop"},
+				},
+			},
+		}
+
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+
+		body := `{"content":"Show page 1"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		messages, err := store.ListMessages(tdb.DB, "chat-1")
+		require.NoError(t, err)
+
+		// Count assistant messages with "Here is page 1" — should be exactly 1
+		var count int
+		for _, m := range messages {
+			if m.Role == "assistant" && m.Content == "Here is page 1" {
+				count++
+			}
+		}
+		assert.Equal(t, 1, count, "final assistant text should appear exactly once, not duplicated")
+	})
+}
+
+func TestSendMessage_PersistsSnapshotPageImage(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	storage := pdf.NewStorage(t.TempDir())
+
+	pdfPath := storage.Path("paper-1")
+	createTestPDFWithText(t, pdfPath, "Chart data here")
+
+	pageCount := 1
+	p := store.Paper{
+		ID:        "paper-1",
+		Title:     "Test Paper",
+		FilePath:  pdfPath,
+		FileSize:  1000,
+		PageCount: &pageCount,
+		CreatedAt: "2026-03-28T00:00:00Z",
+	}
+	require.NoError(t, store.CreatePaper(tdb.DB, p))
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	mock := &multiTurnStreamer{
+		calls: [][]anthropic.StreamEvent{
+			{
+				{Type: "tool_use", ToolUseID: "toolu_snap", ToolName: "snapshot_page", ToolInput: `{"page":1}`},
+				{Type: "message_stop"},
+			},
+			{
+				{Type: "content_block_delta", Text: "I see the chart"},
+				{Type: "message_stop"},
+			},
+		},
+	}
+
+	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+
+	body := `{"content":"Show chart"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	messages, err := store.ListMessages(tdb.DB, "chat-1")
+	require.NoError(t, err)
+
+	// Find the tool_result message
+	var toolResultMsg *store.Message
+	for i := range messages {
+		if messages[i].Role == "user" && messages[i].ContentBlocks != nil {
+			if strings.Contains(*messages[i].ContentBlocks, "tool_result") {
+				toolResultMsg = &messages[i]
+				break
+			}
+		}
+	}
+	require.NotNil(t, toolResultMsg, "should persist tool_result message")
+
+	// Deserialize and verify it contains image content parts
+	var blocks []anthropic.ContentBlock
+	require.NoError(t, json.Unmarshal([]byte(*toolResultMsg.ContentBlocks), &blocks))
+	require.Len(t, blocks, 1)
+	assert.Equal(t, "tool_result", blocks[0].Type)
+	require.NotEmpty(t, blocks[0].ContentParts, "snapshot_page tool_result should contain image content parts")
+	assert.Equal(t, "image", blocks[0].ContentParts[0].Type)
+	require.NotNil(t, blocks[0].ContentParts[0].Source)
+	assert.Equal(t, "image/png", blocks[0].ContentParts[0].Source.MediaType)
+	assert.NotEmpty(t, blocks[0].ContentParts[0].Source.Data)
+}
+
+func TestSendMessage_PersistsAttachments(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	dataDir := t.TempDir()
+	storage := pdf.NewStorage(filepath.Join(dataDir, "papers"))
+
+	seedTestPaper(t, tdb)
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	mock := &mockStreamer{
+		events: []anthropic.StreamEvent{
+			{Type: "content_block_delta", Text: "I see the figure"},
+			{Type: "message_stop"},
+		},
+	}
+	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithDataDir(dataDir))
+
+	// Send message with attachment (base64 PNG)
+	body := `{"content":"What is this?","attachments":[{"image_data":"iVBORw0KGgo=","text":"Figure 1","page":3}]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Check attachments were persisted
+	atts, err := store.ListAttachmentsByChat(tdb.DB, "chat-1")
+	require.NoError(t, err)
+	require.Len(t, atts, 1)
+	assert.Equal(t, "Figure 1", atts[0].Text)
+	assert.Equal(t, 3, atts[0].Page)
+
+	// Check image file exists on disk
+	assert.FileExists(t, atts[0].FilePath)
+}
+
+func TestGetAttachmentImage(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	dataDir := t.TempDir()
+	storage := pdf.NewStorage(filepath.Join(dataDir, "papers"))
+
+	seedTestPaper(t, tdb)
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	// Create a message and attachment manually
+	msg := store.Message{ID: "msg-1", ChatSessionID: "chat-1", Role: "user", Content: "Hello", CreatedAt: "2026-03-28T10:01:00Z"}
+	require.NoError(t, store.CreateMessage(tdb.DB, msg))
+
+	// Write a fake PNG to disk
+	attDir := filepath.Join(dataDir, "attachments")
+	require.NoError(t, os.MkdirAll(attDir, 0o755))
+	imgPath := filepath.Join(attDir, "att-1.png")
+	pngData := []byte{0x89, 0x50, 0x4E, 0x47} // PNG magic bytes
+	require.NoError(t, os.WriteFile(imgPath, pngData, 0o644))
+
+	att := store.Attachment{
+		ID:        "att-1",
+		MessageID: "msg-1",
+		FilePath:  imgPath,
+		Text:      "Fig 1",
+		Page:      1,
+		CreatedAt: "2026-03-28T10:01:00Z",
+	}
+	require.NoError(t, store.CreateAttachment(tdb.DB, att))
+
+	mux := NewMux(tdb.DB, storage, nil, nil, slog.Default(), WithDataDir(dataDir))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/attachments/att-1/image", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "image/png", rec.Header().Get("Content-Type"))
+	assert.Equal(t, pngData, rec.Body.Bytes())
+}
+
+func TestGetChatSessionIncludesAttachments(t *testing.T) {
+	tdb := store.NewTestDB(t)
+	dataDir := t.TempDir()
+	storage := pdf.NewStorage(filepath.Join(dataDir, "papers"))
+
+	seedTestPaper(t, tdb)
+
+	session := store.ChatSession{
+		ID:        "chat-1",
+		PaperID:   "paper-1",
+		Title:     "Test Chat",
+		CreatedAt: "2026-03-28T10:00:00Z",
+	}
+	require.NoError(t, store.CreateChatSession(tdb.DB, session))
+
+	msg := store.Message{ID: "msg-1", ChatSessionID: "chat-1", Role: "user", Content: "Hello", CreatedAt: "2026-03-28T10:01:00Z"}
+	require.NoError(t, store.CreateMessage(tdb.DB, msg))
+
+	att := store.Attachment{
+		ID:        "att-1",
+		MessageID: "msg-1",
+		FilePath:  "/data/att-1.png",
+		Text:      "Figure 1",
+		Page:      3,
+		CreatedAt: "2026-03-28T10:01:00Z",
+	}
+	require.NoError(t, store.CreateAttachment(tdb.DB, att))
+
+	mux := NewMux(tdb.DB, storage, nil, nil, slog.Default(), WithDataDir(dataDir))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/papers/paper-1/chats/chat-1", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var result struct {
+		Messages []struct {
+			ID          string `json:"id"`
+			Attachments []struct {
+				ID   string `json:"id"`
+				Text string `json:"text"`
+				Page int    `json:"page"`
+			} `json:"attachments"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&result))
+	require.Len(t, result.Messages, 1)
+	require.Len(t, result.Messages[0].Attachments, 1)
+	assert.Equal(t, "att-1", result.Messages[0].Attachments[0].ID)
+	assert.Equal(t, "Figure 1", result.Messages[0].Attachments[0].Text)
+	assert.Equal(t, 3, result.Messages[0].Attachments[0].Page)
+}
+
 func TestSendMessage_SearchUsesIndex(t *testing.T) {
 	tdb := store.NewTestDB(t)
 	storage := pdf.NewStorage(t.TempDir())

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/aldehir/research/frontend"
@@ -34,7 +35,8 @@ func newRootCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.String("addr", envOrDefault("ADDR", ":8080"), "listen address")
 	f.String("db-path", envOrDefault("DB_PATH", "research.db"), "SQLite database path")
-	f.String("pdf-dir", envOrDefault("PDF_DIR", "./data/pdfs"), "PDF storage directory")
+	f.String("data-dir", envOrDefault("DATA_DIR", "./data"), "data directory for PDFs and attachments")
+	f.String("pdf-dir", envOrDefault("PDF_DIR", ""), "PDF storage directory (default: {data-dir}/pdfs)")
 	f.String("log-level", envOrDefault("LOG_LEVEL", "info"), "log level (debug, info, warn, error)")
 	f.String("frontend-dir", envOrDefault("FRONTEND_DIR", ""), "serve frontend from this directory instead of embedded build")
 
@@ -50,9 +52,14 @@ func main() {
 func runServe(cmd *cobra.Command, args []string) error {
 	addr, _ := cmd.Flags().GetString("addr")
 	dbPath, _ := cmd.Flags().GetString("db-path")
+	dataDir, _ := cmd.Flags().GetString("data-dir")
 	pdfDir, _ := cmd.Flags().GetString("pdf-dir")
 	logLevelStr, _ := cmd.Flags().GetString("log-level")
 	frontendDir, _ := cmd.Flags().GetString("frontend-dir")
+
+	if pdfDir == "" {
+		pdfDir = filepath.Join(dataDir, "pdfs")
+	}
 
 	logLevel := new(slog.LevelVar)
 	if err := logLevel.UnmarshalText([]byte(logLevelStr)); err != nil {
@@ -85,7 +92,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	go runIndexer(indexer, storage, logger)
 
 	luaEval := luaeval.NewEvaluator(5 * time.Second)
-	mux := api.NewMux(db, storage, chat, luaEval, logger)
+	mux := api.NewMux(db, storage, chat, luaEval, logger, api.WithDataDir(dataDir))
 
 	frontendFS := resolveFrontendFS(frontendDir, logger)
 	if frontendFS != nil {

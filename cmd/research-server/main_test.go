@@ -15,7 +15,8 @@ func TestNewRootCmd_DefaultFlags(t *testing.T) {
 
 	assert.Equal(t, ":8080", cmd.Flag("addr").DefValue)
 	assert.Equal(t, "research.db", cmd.Flag("db-path").DefValue)
-	assert.Equal(t, "./data/pdfs", cmd.Flag("pdf-dir").DefValue)
+	assert.Equal(t, "./data", cmd.Flag("data-dir").DefValue)
+	assert.Equal(t, "", cmd.Flag("pdf-dir").DefValue)
 	assert.Equal(t, "info", cmd.Flag("log-level").DefValue)
 	assert.Equal(t, "", cmd.Flag("frontend-dir").DefValue)
 }
@@ -40,6 +41,7 @@ func TestNewRootCmd_FlagOverride(t *testing.T) {
 func TestNewRootCmd_EnvVarFallback(t *testing.T) {
 	t.Setenv("ADDR", ":3000")
 	t.Setenv("DB_PATH", "/tmp/env.db")
+	t.Setenv("DATA_DIR", "/tmp/envdata")
 	t.Setenv("PDF_DIR", "/tmp/envpdfs")
 	t.Setenv("LOG_LEVEL", "warn")
 	t.Setenv("FRONTEND_DIR", "/tmp/frontend")
@@ -48,6 +50,7 @@ func TestNewRootCmd_EnvVarFallback(t *testing.T) {
 
 	assert.Equal(t, ":3000", cmd.Flag("addr").DefValue)
 	assert.Equal(t, "/tmp/env.db", cmd.Flag("db-path").DefValue)
+	assert.Equal(t, "/tmp/envdata", cmd.Flag("data-dir").DefValue)
 	assert.Equal(t, "/tmp/envpdfs", cmd.Flag("pdf-dir").DefValue)
 	assert.Equal(t, "warn", cmd.Flag("log-level").DefValue)
 	assert.Equal(t, "/tmp/frontend", cmd.Flag("frontend-dir").DefValue)

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,7 +27,7 @@ type ChatStreamer interface {
 
 const maxToolLoopIterations = 10
 
-func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logger *slog.Logger) http.HandlerFunc {
+func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, dataDir string, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		paperID := r.PathValue("id")
 		chatID := r.PathValue("chatId")
@@ -87,6 +89,48 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			return
 		}
 
+		// Save attachment images to disk and persist metadata
+		if dataDir != "" && len(body.Attachments) > 0 {
+			attDir := filepath.Join(dataDir, "attachments")
+			if err := os.MkdirAll(attDir, 0o755); err != nil {
+				logger.Error("failed to create attachments directory", "error", err)
+			} else {
+				for _, att := range body.Attachments {
+					if att.ImageData == "" {
+						continue
+					}
+					attID, err := newUUID()
+					if err != nil {
+						logger.Error("failed to generate attachment ID", "error", err)
+						continue
+					}
+					imgBytes, err := base64.StdEncoding.DecodeString(att.ImageData)
+					if err != nil {
+						logger.Error("failed to decode attachment image", "error", err)
+						continue
+					}
+					imgPath := filepath.Join(attDir, attID+".png")
+					if err := os.WriteFile(imgPath, imgBytes, 0o644); err != nil {
+						logger.Error("failed to write attachment image", "path", imgPath, "error", err)
+						continue
+					}
+					storeAtt := store.Attachment{
+						ID:        attID,
+						MessageID: msgID,
+						FilePath:  imgPath,
+						Text:      att.Text,
+						Page:      att.Page,
+						CreatedAt: time.Now().UTC().Format(time.RFC3339),
+					}
+					if err := store.CreateAttachment(db, storeAtt); err != nil {
+						logger.Error("failed to persist attachment", "id", attID, "error", err)
+					} else {
+						logger.Info("attachment saved", "id", attID, "message_id", msgID, "page", att.Page)
+					}
+				}
+			}
+		}
+
 		// Load all messages for conversation history
 		messages, err := store.ListMessages(db, chatID)
 		if err != nil {
@@ -97,6 +141,18 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 		// Convert to anthropic messages, appending viewer context to the latest user message
 		var anthropicMessages []anthropic.Message
 		for _, m := range messages {
+			// Messages with content_blocks: reconstruct structured content
+			if m.ContentBlocks != nil {
+				var blocks []anthropic.ContentBlock
+				if err := json.Unmarshal([]byte(*m.ContentBlocks), &blocks); err == nil {
+					anthropicMessages = append(anthropicMessages, anthropic.Message{
+						Role:          m.Role,
+						ContentBlocks: blocks,
+					})
+					continue
+				}
+			}
+
 			content := m.Content
 			if m.Role == "user" && m.ID == userMsg.ID {
 				content = appendViewerContext(content, body.CurrentPage)
@@ -203,10 +259,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			}
 
 			var toolCalls []anthropic.StreamEvent
+			var iterationText strings.Builder
 			for ev := range ch {
 				switch ev.Type {
 				case "content_block_delta":
 					fullText.WriteString(ev.Text)
+					iterationText.WriteString(ev.Text)
 					sendSSE(sseResponse{Type: "delta", Text: ev.Text})
 				case "tool_use":
 					toolCalls = append(toolCalls, ev)
@@ -225,8 +283,14 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			logger.Info("tool_loop_iteration", "iteration", toolIterations, "tool_call_count", len(toolCalls))
 
 			// Process tool calls
-			// Build assistant message with tool_use blocks
+			// Build assistant message with tool_use blocks (include preceding text if any)
 			var assistantBlocks []anthropic.ContentBlock
+			if iterationText.Len() > 0 {
+				assistantBlocks = append(assistantBlocks, anthropic.ContentBlock{
+					Type: "text",
+					Text: iterationText.String(),
+				})
+			}
 			for _, tc := range toolCalls {
 				logger.Debug("tool_call", "name", tc.ToolName, "args", tc.ToolInput)
 				assistantBlocks = append(assistantBlocks, anthropic.ContentBlock{
@@ -244,11 +308,15 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 				})
 			}
 
-			// Append assistant tool_use message
-			req.Messages = append(req.Messages, anthropic.Message{
+			// Append assistant tool_use message to request
+			assistantMsg := anthropic.Message{
 				Role:          "assistant",
 				ContentBlocks: assistantBlocks,
-			})
+			}
+			req.Messages = append(req.Messages, assistantMsg)
+
+			// Persist assistant tool_use message
+			persistContentBlocks(db, chatID, "assistant", assistantBlocks, logger)
 
 			// Execute tools and build tool_result blocks
 			tctx := toolContext{db: db, paperID: paperID, pdfPath: pdfPath}
@@ -293,6 +361,9 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 				Role:          "user",
 				ContentBlocks: resultBlocks,
 			})
+
+			// Persist user tool_result message
+			persistContentBlocks(db, chatID, "user", resultBlocks, logger)
 		}
 
 		logger.Info("response_complete",
@@ -301,7 +372,7 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			"total_duration", time.Since(responseStart),
 		)
 
-		// Store assistant message (final text only)
+		// Store final assistant message
 		assistantID, err := newUUID()
 		if err != nil {
 			return
@@ -314,6 +385,31 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 		}
 		store.CreateMessage(db, assistantMsg)
+	}
+}
+
+// persistContentBlocks saves a message with JSON-serialized content blocks to the DB.
+func persistContentBlocks(db *sql.DB, chatID, role string, blocks []anthropic.ContentBlock, logger *slog.Logger) {
+	id, err := newUUID()
+	if err != nil {
+		logger.Error("failed to generate UUID for tool message", "error", err)
+		return
+	}
+	blocksJSON, err := json.Marshal(blocks)
+	if err != nil {
+		logger.Error("failed to marshal content blocks", "error", err)
+		return
+	}
+	blocksStr := string(blocksJSON)
+	msg := store.Message{
+		ID:            id,
+		ChatSessionID: chatID,
+		Role:          role,
+		ContentBlocks: &blocksStr,
+		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := store.CreateMessage(db, msg); err != nil {
+		logger.Error("failed to persist tool message", "role", role, "error", err)
 	}
 }
 

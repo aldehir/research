@@ -87,6 +87,18 @@ func handleCreateChatSession(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 	}
 }
 
+// messageWithAttachments extends a store.Message with its attachments for API responses.
+type messageWithAttachments struct {
+	store.Message
+	Attachments []attachmentResponse `json:"attachments,omitempty"`
+}
+
+type attachmentResponse struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+	Page int    `json:"page"`
+}
+
 func handleGetChatSession(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		chatID := r.PathValue("chatId")
@@ -101,7 +113,37 @@ func handleGetChatSession(db *sql.DB, logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, result)
+		// Load attachments for all messages in this chat
+		chatAtts, err := store.ListAttachmentsByChat(db, chatID)
+		if err != nil {
+			logger.Warn("failed to load attachments", "chat_id", chatID, "error", err)
+		}
+
+		// Group attachments by message ID
+		attsByMsg := make(map[string][]attachmentResponse)
+		for _, a := range chatAtts {
+			attsByMsg[a.MessageID] = append(attsByMsg[a.MessageID], attachmentResponse{
+				ID:   a.ID,
+				Text: a.Text,
+				Page: a.Page,
+			})
+		}
+
+		// Build enriched messages
+		msgs := make([]messageWithAttachments, len(result.Messages))
+		for i, m := range result.Messages {
+			msgs[i] = messageWithAttachments{Message: m, Attachments: attsByMsg[m.ID]}
+		}
+
+		resp := struct {
+			store.ChatSession
+			Messages []messageWithAttachments `json:"messages"`
+		}{
+			ChatSession: result.ChatSession,
+			Messages:    msgs,
+		}
+
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 

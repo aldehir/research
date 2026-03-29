@@ -91,6 +91,45 @@ func (cb ContentBlock) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON deserializes a ContentBlock from JSON.
+func (cb *ContentBlock) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Type      string          `json:"type"`
+		Text      string          `json:"text,omitempty"`
+		ID        string          `json:"id,omitempty"`
+		Name      string          `json:"name,omitempty"`
+		Input     json.RawMessage `json:"input,omitempty"`
+		ToolUseID string          `json:"tool_use_id,omitempty"`
+		Content   json.RawMessage `json:"content,omitempty"`
+		Source    *ImageSource    `json:"source,omitempty"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	cb.Type = raw.Type
+	cb.Text = raw.Text
+	cb.ID = raw.ID
+	cb.Name = raw.Name
+	cb.Input = raw.Input
+	cb.ToolUseID = raw.ToolUseID
+	cb.Source = raw.Source
+
+	if raw.Content != nil {
+		// Try string first
+		var s string
+		if err := json.Unmarshal(raw.Content, &s); err == nil {
+			cb.Content = s
+		} else {
+			// Try content parts array
+			var parts []ContentPart
+			if err := json.Unmarshal(raw.Content, &parts); err == nil {
+				cb.ContentParts = parts
+			}
+		}
+	}
+	return nil
+}
+
 // Message represents a chat message. Use Content for simple text messages
 // or ContentBlocks for structured content (tool_use, tool_result).
 type Message struct {
