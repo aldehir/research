@@ -291,7 +291,7 @@ func TestSendMessage(t *testing.T) {
 		}
 		mux := testMuxWithChat(t, tdb, mock)
 
-		body := `{"content":"What is this?","current_page":5,"selected_text":"some formula"}`
+		body := `{"content":"What is this?","current_page":5}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -304,9 +304,6 @@ func TestSendMessage(t *testing.T) {
 		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
 		assert.Contains(t, lastMsg.Content, "What is this?")
 		assert.Contains(t, lastMsg.Content, "Current page: 5")
-		assert.Contains(t, lastMsg.Content, "Selected text: some formula")
-		// Should NOT contain surrounding text
-		assert.NotContains(t, lastMsg.Content, "surrounding")
 	})
 
 	t.Run("no viewer context appended when no page info", func(t *testing.T) {
@@ -384,34 +381,6 @@ func TestSendMessage(t *testing.T) {
 		assert.Equal(t, 20, mock.captured.TotalPages)
 	})
 
-	t.Run("stores selected_text on user message", func(t *testing.T) {
-		tdb := store.NewTestDB(t)
-		seedChatSession(t, tdb)
-
-		mock := &mockStreamer{
-			events: []anthropic.StreamEvent{
-				{Type: "content_block_delta", Text: "Ok"},
-				{Type: "message_stop"},
-			},
-		}
-		mux := testMuxWithChat(t, tdb, mock)
-
-		body := `{"content":"What is this?","selected_text":"some text","surrounding_text":"context"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-
-		messages, err := store.ListMessages(tdb.DB, "chat-1")
-		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(messages), 1)
-		require.NotNil(t, messages[0].SelectedText)
-		assert.Equal(t, "some text", *messages[0].SelectedText)
-		require.NotNil(t, messages[0].SurroundingText)
-		assert.Equal(t, "context", *messages[0].SurroundingText)
-	})
 }
 
 func TestSendMessage_ToolExecutionLoop(t *testing.T) {

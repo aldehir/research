@@ -73,14 +73,7 @@ export interface Message {
 	chat_session_id: string;
 	role: 'user' | 'assistant';
 	content: string;
-	selected_text?: string;
 	created_at: string;
-}
-
-export interface MessageContext {
-	selectedText?: string;
-	surroundingText?: string;
-	currentPage?: number;
 }
 
 export interface ChatSessionWithMessages extends ChatSession {
@@ -140,19 +133,13 @@ export async function sendMessage(
 	onDelta: (text: string) => void,
 	onDone: () => void,
 	onError: (error: string) => void,
-	context?: MessageContext,
+	currentPage?: number,
 	onToolCall?: (tool: ToolCall) => void,
 	onToolResult?: (result: ToolResult) => void
 ): Promise<void> {
 	const reqBody: Record<string, string | number> = { content };
-	if (context?.selectedText) {
-		reqBody.selected_text = context.selectedText;
-	}
-	if (context?.surroundingText) {
-		reqBody.surrounding_text = context.surroundingText;
-	}
-	if (context?.currentPage) {
-		reqBody.current_page = context.currentPage;
+	if (currentPage) {
+		reqBody.current_page = currentPage;
 	}
 
 	let response: Response;

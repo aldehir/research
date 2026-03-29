@@ -83,16 +83,11 @@ func TestGetChatSessionWithMessages(t *testing.T) {
 	}
 	require.NoError(t, CreateChatSession(db, session))
 
-	selectedText := "some selected text"
-	surroundingText := "context around it"
-
 	m1 := Message{
 		ID:            "msg-1",
 		ChatSessionID: "chat-1",
 		Role:          "user",
 		Content:       "Hello",
-		SelectedText:  &selectedText,
-		SurroundingText: &surroundingText,
 		CreatedAt:     "2026-03-28T10:01:00Z",
 	}
 	m2 := Message{
@@ -111,8 +106,6 @@ func TestGetChatSessionWithMessages(t *testing.T) {
 	require.Len(t, got.Messages, 2)
 	assert.Equal(t, "msg-1", got.Messages[0].ID)
 	assert.Equal(t, "msg-2", got.Messages[1].ID)
-	assert.Equal(t, &selectedText, got.Messages[0].SelectedText)
-	assert.Nil(t, got.Messages[1].SelectedText)
 }
 
 func TestGetChatSessionWithMessagesNotFound(t *testing.T) {

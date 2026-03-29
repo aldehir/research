@@ -39,3 +39,5 @@
 - [x] 35 — Hideable sidebar panel in desktop view `COMPLETE`
 - [x] 36 — Mobile panel layout tweaks `COMPLETE`
 - [x] 37 — Keyboard scroll navigation in PDF viewer `COMPLETE`
+- [x] 38 — Remove attach selection from UI and backend `COMPLETE`
+- [ ] 39 — Light theme for ToC panel `IN PROGRESS`

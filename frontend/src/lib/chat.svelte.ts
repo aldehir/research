@@ -5,7 +5,7 @@ import {
 	deleteChatSession,
 	sendMessage
 } from '$lib/api';
-import type { ChatSession, Message, MessageContext, ToolCall, ToolResult } from '$lib/api';
+import type { ChatSession, Message, ToolCall, ToolResult } from '$lib/api';
 import { generateId } from '$lib/uuid';
 import { requestGoToPage } from '$lib/pdf-navigate.svelte';
 
@@ -74,7 +74,7 @@ export async function sendChatMessage(
 	paperId: string,
 	chatId: string,
 	content: string,
-	context?: MessageContext
+	currentPage?: number
 ): Promise<void> {
 	const userMessage: Message = {
 		id: generateId(),
@@ -119,7 +119,7 @@ export async function sendChatMessage(
 			streamSegments = [];
 			isStreaming = false;
 		},
-		context,
+		currentPage,
 		(tool: ToolCall) => {
 			streamSegments.push({
 				type: 'tool',

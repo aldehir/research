@@ -38,10 +38,8 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 
 		// Parse request body
 		var body struct {
-			Content         string `json:"content"`
-			SelectedText    string `json:"selected_text"`
-			SurroundingText string `json:"surrounding_text"`
-			CurrentPage     int    `json:"current_page"`
+			Content     string `json:"content"`
+			CurrentPage int    `json:"current_page"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body", logger)
@@ -71,23 +69,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 			return
 		}
 
-		var selectedText *string
-		if body.SelectedText != "" {
-			selectedText = &body.SelectedText
-		}
-		var surroundingText *string
-		if body.SurroundingText != "" {
-			surroundingText = &body.SurroundingText
-		}
-
 		userMsg := store.Message{
-			ID:              msgID,
-			ChatSessionID:   chatID,
-			Role:            "user",
-			Content:         body.Content,
-			SelectedText:    selectedText,
-			SurroundingText: surroundingText,
-			CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+			ID:            msgID,
+			ChatSessionID: chatID,
+			Role:          "user",
+			Content:       body.Content,
+			CreatedAt:     time.Now().UTC().Format(time.RFC3339),
 		}
 		if err := store.CreateMessage(db, userMsg); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to store message", logger)
@@ -106,7 +93,7 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, chat ChatStreamer, logg
 		for _, m := range messages {
 			content := m.Content
 			if m.Role == "user" && m.ID == userMsg.ID {
-				content = appendViewerContext(content, body.CurrentPage, body.SelectedText)
+				content = appendViewerContext(content, body.CurrentPage)
 			}
 			anthropicMessages = append(anthropicMessages, anthropic.Message{
 				Role:    m.Role,
@@ -437,20 +424,14 @@ type toolContext struct {
 	pdfPath string
 }
 
-func appendViewerContext(content string, currentPage int, selectedText string) string {
-	if currentPage == 0 && selectedText == "" {
+func appendViewerContext(content string, currentPage int) string {
+	if currentPage == 0 {
 		return content
 	}
 
 	var b strings.Builder
 	b.WriteString(content)
-	b.WriteString("\n\n[Viewer context]")
-	if currentPage > 0 {
-		b.WriteString(fmt.Sprintf("\nCurrent page: %d", currentPage))
-	}
-	if selectedText != "" {
-		b.WriteString(fmt.Sprintf("\nSelected text: %s", selectedText))
-	}
+	b.WriteString(fmt.Sprintf("\n\n[Viewer context]\nCurrent page: %d", currentPage))
 	return b.String()
 }
 

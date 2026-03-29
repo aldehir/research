@@ -8,7 +8,7 @@
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
 	import { getScrollDelta, shouldSkipKeyHandler } from '$lib/pdf-keys';
-	import { setPages, setCurrentPage, setSelectedText } from '$lib/pdf-context.svelte';
+	import { setCurrentPage } from '$lib/pdf-context.svelte';
 	import { extractOutline, type TocEntry } from '$lib/pdf-outline';
 	import TocPanel from '$lib/TocPanel.svelte';
 	import ResizeHandle from '$lib/ResizeHandle.svelte';
@@ -449,11 +449,7 @@
 		}
 	}
 
-	// Sync pages and currentPage to shared pdf-context store
-	$effect(() => {
-		setPages(pages);
-	});
-
+	// Sync currentPage to shared pdf-context store
 	$effect(() => {
 		setCurrentPage(currentPage);
 	});
@@ -465,24 +461,6 @@
 			consumeNavigateTarget();
 			goToPage(target);
 		}
-	});
-
-	function handleSelectionChange(): void {
-		const sel = window.getSelection();
-		if (!sel || sel.isCollapsed || !scrollContainer) {
-			return;
-		}
-		// Only capture selection within our PDF text layers
-		const anchorNode = sel.anchorNode;
-		if (anchorNode && scrollContainer.contains(anchorNode)) {
-			const text = sel.toString().trim();
-			setSelectedText(text);
-		}
-	}
-
-	$effect(() => {
-		document.addEventListener('selectionchange', handleSelectionChange);
-		return () => document.removeEventListener('selectionchange', handleSelectionChange);
 	});
 
 	// Debounced save of reading position when currentPage changes

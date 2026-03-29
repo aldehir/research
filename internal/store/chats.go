@@ -12,13 +12,11 @@ type ChatSession struct {
 
 // Message represents a single message within a chat session.
 type Message struct {
-	ID              string  `json:"id"`
-	ChatSessionID   string  `json:"chat_session_id"`
-	Role            string  `json:"role"`
-	Content         string  `json:"content"`
-	SelectedText    *string `json:"selected_text,omitempty"`
-	SurroundingText *string `json:"surrounding_text,omitempty"`
-	CreatedAt       string  `json:"created_at"`
+	ID            string `json:"id"`
+	ChatSessionID string `json:"chat_session_id"`
+	Role          string `json:"role"`
+	Content       string `json:"content"`
+	CreatedAt     string `json:"created_at"`
 }
 
 // ChatSessionWithMessages combines a chat session with its messages.
@@ -107,8 +105,8 @@ func DeleteChatSession(db *sql.DB, id string) error {
 // CreateMessage inserts a new message record.
 func CreateMessage(db *sql.DB, m Message) error {
 	_, err := db.Exec(
-		`INSERT INTO messages (id, chat_session_id, role, content, selected_text, surrounding_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		m.ID, m.ChatSessionID, m.Role, m.Content, m.SelectedText, m.SurroundingText, m.CreatedAt,
+		`INSERT INTO messages (id, chat_session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`,
+		m.ID, m.ChatSessionID, m.Role, m.Content, m.CreatedAt,
 	)
 	return err
 }
@@ -116,7 +114,7 @@ func CreateMessage(db *sql.DB, m Message) error {
 // ListMessages returns all messages for a chat session, ordered by created_at ascending.
 func ListMessages(db *sql.DB, chatSessionID string) ([]Message, error) {
 	rows, err := db.Query(
-		`SELECT id, chat_session_id, role, content, selected_text, surrounding_text, created_at FROM messages WHERE chat_session_id = ? ORDER BY created_at ASC`,
+		`SELECT id, chat_session_id, role, content, created_at FROM messages WHERE chat_session_id = ? ORDER BY created_at ASC`,
 		chatSessionID,
 	)
 	if err != nil {
@@ -127,7 +125,7 @@ func ListMessages(db *sql.DB, chatSessionID string) ([]Message, error) {
 	var messages []Message
 	for rows.Next() {
 		var m Message
-		if err := rows.Scan(&m.ID, &m.ChatSessionID, &m.Role, &m.Content, &m.SelectedText, &m.SurroundingText, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.ChatSessionID, &m.Role, &m.Content, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		messages = append(messages, m)

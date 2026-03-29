@@ -205,7 +205,7 @@ describe('sendMessage', () => {
 		expect(onError).toHaveBeenCalledWith('Network error');
 	});
 
-	it('sends selected_text and surrounding_text when provided', async () => {
+	it('sends current_page when provided', async () => {
 		const stream = makeSSEStream([
 			'data: {"type":"done"}'
 		]);
@@ -216,18 +216,16 @@ describe('sendMessage', () => {
 		}));
 
 		await sendMessage(paperId, chatId, 'Explain this',
-			vi.fn(), vi.fn(), vi.fn(),
-			{ selectedText: 'some highlighted text', surroundingText: 'page content' }
+			vi.fn(), vi.fn(), vi.fn(), 5
 		);
 
 		const callArgs = vi.mocked(fetch).mock.calls[0];
 		const body = JSON.parse(callArgs[1]?.body as string);
 		expect(body.content).toBe('Explain this');
-		expect(body.selected_text).toBe('some highlighted text');
-		expect(body.surrounding_text).toBe('page content');
+		expect(body.current_page).toBe(5);
 	});
 
-	it('omits selected_text and surrounding_text when not provided', async () => {
+	it('omits current_page when not provided', async () => {
 		const stream = makeSSEStream([
 			'data: {"type":"done"}'
 		]);
@@ -244,8 +242,7 @@ describe('sendMessage', () => {
 		const callArgs = vi.mocked(fetch).mock.calls[0];
 		const body = JSON.parse(callArgs[1]?.body as string);
 		expect(body.content).toBe('Hi');
-		expect(body.selected_text).toBeUndefined();
-		expect(body.surrounding_text).toBeUndefined();
+		expect(body.current_page).toBeUndefined();
 	});
 
 	it('calls onToolCall for tool_call events', async () => {

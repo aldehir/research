@@ -32,15 +32,12 @@ beforeEach(() => {
 });
 
 describe('sendChatMessage', () => {
-	it('passes context to sendMessage when provided', async () => {
+	it('passes currentPage to sendMessage when provided', async () => {
 		vi.mocked(sendMessage).mockImplementation(
 			async (_p, _c, _content, _onDelta, onDone) => { onDone(); }
 		);
 
-		await sendChatMessage(paperId, chatId, 'Hello', {
-			selectedText: 'quoted text',
-			surroundingText: 'page content'
-		});
+		await sendChatMessage(paperId, chatId, 'Hello', 5);
 
 		expect(sendMessage).toHaveBeenCalledWith(
 			paperId,
@@ -49,13 +46,13 @@ describe('sendChatMessage', () => {
 			expect.any(Function),
 			expect.any(Function),
 			expect.any(Function),
-			{ selectedText: 'quoted text', surroundingText: 'page content' },
+			5,
 			expect.any(Function),
 			expect.any(Function)
 		);
 	});
 
-	it('passes undefined context when not provided', async () => {
+	it('passes undefined currentPage when not provided', async () => {
 		vi.mocked(sendMessage).mockImplementation(
 			async (_p, _c, _content, _onDelta, onDone) => { onDone(); }
 		);
@@ -73,23 +70,6 @@ describe('sendChatMessage', () => {
 			expect.any(Function),
 			expect.any(Function)
 		);
-	});
-
-	it('does not include selected_text on user message (system-prompt-only context)', async () => {
-		vi.mocked(sendMessage).mockImplementation(
-			async (_p, _c, _content, _onDelta, onDone) => { onDone(); }
-		);
-
-		await sendChatMessage(paperId, chatId, 'Hello', {
-			selectedText: 'quoted text',
-			surroundingText: 'page content'
-		});
-
-		const { getMessages } = await import('$lib/chat.svelte');
-		const messages = getMessages();
-		const userMsg = messages.find(m => m.role === 'user');
-		expect(userMsg).toBeDefined();
-		expect(userMsg!.selected_text).toBeUndefined();
 	});
 });
 

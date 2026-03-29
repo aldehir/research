@@ -67,8 +67,6 @@ CREATE TABLE IF NOT EXISTS messages (
 	chat_session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
 	role TEXT NOT NULL,
 	content TEXT NOT NULL,
-	selected_text TEXT,
-	surrounding_text TEXT,
 	created_at TEXT NOT NULL
 );
 `
