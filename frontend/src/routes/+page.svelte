@@ -3,6 +3,7 @@
 	import PdfViewer from '$lib/PdfViewer.svelte';
 	import UploadZone from '$lib/UploadZone.svelte';
 	import ChatPanel from '$lib/ChatPanel.svelte';
+	import ResizeHandle from '$lib/ResizeHandle.svelte';
 	import { papersStore } from '$lib/papers.svelte';
 	import { untrack } from 'svelte';
 	import {
@@ -14,14 +15,36 @@
 		closePanel
 	} from '$lib/mobile-layout.svelte';
 	import { getTheme, setTheme, initTheme, type Theme } from '$lib/theme.svelte';
+	import {
+		getSidebarWidth,
+		getChatWidth,
+		initPanelWidths,
+		handleSidebarResize,
+		handleChatResize
+	} from '$lib/panel-widths.svelte';
 	import { Icon, Menu, MessageSquare, Sun, Monitor, Moon } from '$lib/icons';
 	import { onMount } from 'svelte';
 
 	const themeOrder: Theme[] = ['light', 'system', 'dark'];
 
+	let layoutEl: HTMLDivElement | undefined = $state();
+
 	onMount(() => {
 		initTheme();
+		initPanelWidths();
 	});
+
+	function getLayoutWidth(): number {
+		return layoutEl?.clientWidth ?? 1200;
+	}
+
+	function onSidebarResize(delta: number) {
+		handleSidebarResize(delta, getLayoutWidth());
+	}
+
+	function onChatResize(delta: number) {
+		handleChatResize(delta, getLayoutWidth());
+	}
 
 	function cycleTheme() {
 		const idx = themeOrder.indexOf(getTheme());
@@ -81,7 +104,7 @@
 			{/if}
 		</div>
 	</header>
-	<div class="app-layout">
+	<div class="app-layout" bind:this={layoutEl}>
 		{#if getIsMobile()}
 			{#if getActivePanel()}
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -97,11 +120,12 @@
 				<UploadZone />
 			</aside>
 		{:else}
-			<aside class="sidebar">
+			<aside class="sidebar" style:width="{getSidebarWidth()}px">
 				<div class="sidebar-header">Papers</div>
 				<PaperList />
 				<UploadZone />
 			</aside>
+			<ResizeHandle onResize={onSidebarResize} side="left" />
 		{/if}
 		<main class="content">
 			{#if papersStore.selectedPaper}
@@ -119,7 +143,8 @@
 					<ChatPanel paperId={papersStore.selectedPaper.id} />
 				</div>
 			{:else}
-				<ChatPanel paperId={papersStore.selectedPaper.id} />
+				<ResizeHandle onResize={onChatResize} side="right" />
+				<ChatPanel paperId={papersStore.selectedPaper.id} chatWidth={getChatWidth()} />
 			{/if}
 		{/if}
 	</div>
@@ -192,12 +217,12 @@
 	}
 
 	.sidebar {
-		width: 280px;
-		min-width: 220px;
+		min-width: 0;
 		border-right: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg-secondary);
+		flex-shrink: 0;
 	}
 
 	.content {

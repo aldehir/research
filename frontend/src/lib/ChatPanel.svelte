@@ -7,9 +7,10 @@
 
 	interface Props {
 		paperId: string;
+		chatWidth?: number;
 	}
 
-	let { paperId }: Props = $props();
+	let { paperId, chatWidth }: Props = $props();
 	let collapsed = $state(false);
 	let dropdownOpen = $state(false);
 	let previousPaperId = $state('');
@@ -51,7 +52,7 @@
 		</button>
 	</div>
 {:else}
-	<div class="chat-panel">
+	<div class="chat-panel" style:width={chatWidth ? `${chatWidth}px` : undefined}>
 		<div class="chat-header">
 			<div class="session-picker">
 				<button
@@ -116,13 +117,14 @@
 <style>
 	.chat-panel {
 		width: 360px;
-		min-width: 300px;
+		min-width: 0;
 		border-left: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg);
 		height: 100%;
 		position: relative;
+		flex-shrink: 0;
 	}
 
 	.chat-collapsed {

@@ -24,7 +24,7 @@
 - [ ] 20 — URL-based paper routing `TODO`
 - [x] 21 — Fix chat selection dropdown `COMPLETE`
 - [x] 22 — Overlay delete icon in paper side menu `COMPLETE`
-- [ ] 23 — Add resize handles to side panels in desktop view `TODO`
+- [x] 23 — Add resize handles to side panels in desktop view `COMPLETE`
 - [x] 24 — Reduce ctrl+scroll zoom sensitivity `COMPLETE`
 - [x] 25 — Clean up frontend visual/UI tests `COMPLETE`
 - [ ] 26 — Upload button in sidebar header and full-panel drop zone `TODO`
