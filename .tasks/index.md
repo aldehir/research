@@ -41,3 +41,4 @@
 - [x] 37 — Keyboard scroll navigation in PDF viewer `COMPLETE`
 - [x] 38 — Remove attach selection from UI and backend `COMPLETE`
 - [ ] 39 — Light theme for ToC panel `IN PROGRESS`
+- [x] 40 — Match textarea and send button height in chat input `COMPLETE`
