@@ -27,8 +27,6 @@ export const ZoomIn = '<circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y
 
 export const Maximize2 = '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>';
 
-export const Minimize2 = '<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/>';
-
 export const PanelLeftOpen = '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>';
 
 export const PanelLeftClose = '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m10 15-3-3 3-3"/>';

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -26,47 +26,47 @@ describe('viewport meta', () => {
 
 describe('fullscreen store', () => {
 	beforeEach(() => {
-		localStorage.clear();
+		// Mock Fullscreen API
+		Object.defineProperty(document, 'fullscreenElement', {
+			writable: true,
+			value: null
+		});
+		document.exitFullscreen = vi.fn().mockResolvedValue(undefined);
+		document.documentElement.requestFullscreen = vi.fn().mockResolvedValue(undefined);
 	});
 
-	it('defaults to false', async () => {
+	it('defaults to false when no fullscreen element', async () => {
 		const { isFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
 		initFullscreen();
 		expect(isFullscreen()).toBe(false);
 	});
 
-	it('toggles fullscreen on and off', async () => {
-		const { isFullscreen, toggleFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
-		initFullscreen();
-		expect(isFullscreen()).toBe(false);
-		toggleFullscreen();
-		expect(isFullscreen()).toBe(true);
-		toggleFullscreen();
-		expect(isFullscreen()).toBe(false);
-	});
-
-	it('persists to localStorage', async () => {
+	it('calls requestFullscreen on toggle when not fullscreen', async () => {
 		const { toggleFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
 		initFullscreen();
 		toggleFullscreen();
-		expect(localStorage.getItem('fullscreen')).toBe('true');
-		toggleFullscreen();
-		expect(localStorage.getItem('fullscreen')).toBe('false');
+		expect(document.documentElement.requestFullscreen).toHaveBeenCalled();
 	});
 
-	it('restores from localStorage on init', async () => {
+	it('calls exitFullscreen on toggle when fullscreen', async () => {
+		const { toggleFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
+		(document as unknown as Record<string, unknown>).fullscreenElement = document.documentElement;
+		initFullscreen();
+		toggleFullscreen();
+		expect(document.exitFullscreen).toHaveBeenCalled();
+	});
+
+	it('tracks fullscreenchange events', async () => {
 		const { isFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
-		localStorage.setItem('fullscreen', 'true');
 		initFullscreen();
-		expect(isFullscreen()).toBe(true);
-	});
+		expect(isFullscreen()).toBe(false);
 
-	it('sets data-fullscreen attribute on html element', async () => {
-		const { toggleFullscreen, initFullscreen } = await import('$lib/fullscreen.svelte');
-		initFullscreen();
-		toggleFullscreen();
-		expect(document.documentElement.hasAttribute('data-fullscreen')).toBe(true);
-		toggleFullscreen();
-		expect(document.documentElement.hasAttribute('data-fullscreen')).toBe(false);
+		(document as unknown as Record<string, unknown>).fullscreenElement = document.documentElement;
+		document.dispatchEvent(new Event('fullscreenchange'));
+		expect(isFullscreen()).toBe(true);
+
+		(document as unknown as Record<string, unknown>).fullscreenElement = null;
+		document.dispatchEvent(new Event('fullscreenchange'));
+		expect(isFullscreen()).toBe(false);
 	});
 });

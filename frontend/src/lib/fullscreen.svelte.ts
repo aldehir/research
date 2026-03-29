@@ -1,5 +1,3 @@
-const STORAGE_KEY = 'fullscreen';
-
 let fullscreen = $state(false);
 
 export function isFullscreen(): boolean {
@@ -7,25 +5,16 @@ export function isFullscreen(): boolean {
 }
 
 export function toggleFullscreen(): void {
-	setFullscreen(!fullscreen);
-}
-
-export function setFullscreen(value: boolean): void {
-	fullscreen = value;
-	localStorage.setItem(STORAGE_KEY, String(value));
-	applyFullscreen(value);
+	if (fullscreen) {
+		document.exitFullscreen().catch(() => {});
+	} else {
+		document.documentElement.requestFullscreen().catch(() => {});
+	}
 }
 
 export function initFullscreen(): void {
-	const stored = localStorage.getItem(STORAGE_KEY);
-	fullscreen = stored === 'true';
-	applyFullscreen(fullscreen);
-}
-
-function applyFullscreen(value: boolean): void {
-	if (value) {
-		document.documentElement.setAttribute('data-fullscreen', '');
-	} else {
-		document.documentElement.removeAttribute('data-fullscreen');
-	}
+	fullscreen = !!document.fullscreenElement;
+	document.addEventListener('fullscreenchange', () => {
+		fullscreen = !!document.fullscreenElement;
+	});
 }
