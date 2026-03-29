@@ -78,17 +78,15 @@
 	}
 
 	li {
-		display: flex;
-		align-items: center;
+		position: relative;
 		border-bottom: 1px solid var(--color-border);
 	}
 
 	.paper-item {
-		flex: 1;
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		padding: 0.75rem 1rem;
+		padding: 0.75rem 2.5rem 0.75rem 1rem;
 		border: none;
 		background: none;
 		cursor: pointer;
@@ -118,15 +116,28 @@
 	}
 
 	.delete-btn {
+		position: absolute;
+		right: 0;
+		top: 0;
+		bottom: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0.5rem;
+		padding: 0 0.5rem;
 		border: none;
-		background: none;
+		background: linear-gradient(to right, transparent, var(--color-bg) 40%);
 		cursor: pointer;
 		color: var(--color-text-tertiary);
 		line-height: 1;
+		z-index: 1;
+	}
+
+	li:has(.paper-item:hover) .delete-btn {
+		background: linear-gradient(to right, transparent, var(--color-surface-hover) 40%);
+	}
+
+	li:has(.paper-item.selected) .delete-btn {
+		background: linear-gradient(to right, transparent, var(--color-surface-active) 40%);
 	}
 
 	.delete-btn:hover {
@@ -136,7 +147,7 @@
 	@media (max-width: 1023px) {
 		.paper-item {
 			min-height: 44px;
-			padding: 0.75rem 1rem;
+			padding: 0.75rem 3rem 0.75rem 1rem;
 		}
 
 		.delete-btn {
