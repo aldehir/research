@@ -4,7 +4,7 @@
 	import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 	import { getPdfUrl, updateReadingPosition } from '$lib/api';
 	import { papersStore } from '$lib/papers.svelte';
-	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale } from '$lib/pdf-utils';
+	import { clampPage, zoomIn, zoomOut, zoomByDelta, formatZoom, fitToWidthScale, maxPageWidth } from '$lib/pdf-utils';
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
 	import { setPages, setCurrentPage, setSelectedText } from '$lib/pdf-context.svelte';
@@ -63,6 +63,7 @@
 	let renderGeneration = 0;
 	let resizeObserver: ResizeObserver | null = null;
 	let isFitToWidth = $state(true);
+	let maxIntrinsicWidth = 0;
 
 	let tocEntries = $state<TocEntry[]>([]);
 	let tocVisible = $state(false);
@@ -103,9 +104,8 @@
 	}
 
 	function computeFitScale(): number | null {
-		if (!scrollContainer || pages.length === 0) return null;
-		const pageWidth = pages[0].getViewport({ scale: 1.0 }).width * PDF_TO_CSS_UNITS;
-		return fitToWidthScale(scrollContainer.clientWidth, pageWidth, CONTAINER_PADDING);
+		if (!scrollContainer || pages.length === 0 || maxIntrinsicWidth === 0) return null;
+		return fitToWidthScale(scrollContainer.clientWidth, maxIntrinsicWidth, CONTAINER_PADDING);
 	}
 
 	function handleFitToWidth(): void {
@@ -236,10 +236,13 @@
 			tocEntries = await extractOutline(doc);
 			tocVisible = tocEntries.length > 0;
 
-			// Compute initial fit-to-width scale
-			if (scrollContainer && allPages.length > 0) {
-				const pageWidth = allPages[0].getViewport({ scale: 1.0 }).width * PDF_TO_CSS_UNITS;
-				scale = fitToWidthScale(scrollContainer.clientWidth, pageWidth, CONTAINER_PADDING);
+			// Compute max intrinsic width across all pages and initial fit-to-width scale
+			if (allPages.length > 0) {
+				const widths = allPages.map(p => p.getViewport({ scale: 1.0 }).width * PDF_TO_CSS_UNITS);
+				maxIntrinsicWidth = maxPageWidth(widths);
+				if (scrollContainer) {
+					scale = fitToWidthScale(scrollContainer.clientWidth, maxIntrinsicWidth, CONTAINER_PADDING);
+				}
 			}
 		} catch (e) {
 			if (thisLoad !== currentLoadId) return;

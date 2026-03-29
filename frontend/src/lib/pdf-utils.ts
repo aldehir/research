@@ -33,6 +33,11 @@ export function zoomByDelta(scale: number, deltaY: number): number {
 	return clampScale(scale * factor);
 }
 
+export function maxPageWidth(widths: number[]): number {
+	if (widths.length === 0) return 0;
+	return Math.max(...widths);
+}
+
 export function fitToWidthScale(
 	containerWidth: number,
 	pageWidth: number,

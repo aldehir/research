@@ -7,6 +7,7 @@ import {
 	clampPage,
 	formatZoom,
 	fitToWidthScale,
+	maxPageWidth,
 	DEFAULT_SCALE,
 	ZOOM_STEP,
 	MIN_SCALE,
@@ -132,6 +133,34 @@ describe('fitToWidthScale', () => {
 	it('uses zero padding by default', () => {
 		const scale = fitToWidthScale(612, 612);
 		expect(scale).toBe(1.0);
+	});
+});
+
+describe('maxPageWidth', () => {
+	it('returns the widest width from an array of widths', () => {
+		expect(maxPageWidth([400, 612, 500])).toBe(612);
+	});
+
+	it('works when the first page is the narrowest', () => {
+		// Cover page narrower than body pages
+		expect(maxPageWidth([300, 612, 612, 612])).toBe(612);
+	});
+
+	it('returns the single width when only one page', () => {
+		expect(maxPageWidth([612])).toBe(612);
+	});
+
+	it('returns 0 for empty array', () => {
+		expect(maxPageWidth([])).toBe(0);
+	});
+
+	it('fitToWidthScale with maxPageWidth fits the widest page', () => {
+		const widths = [300, 612, 500];
+		const widest = maxPageWidth(widths);
+		const scale = fitToWidthScale(800, widest, 16);
+		// (800 - 16) / 612 = 1.28... — widest page fits
+		expect(scale).toBeCloseTo(1.28, 2);
+		// narrower pages would also fit (300 * 1.28 = 384 < 784)
 	});
 });
 
