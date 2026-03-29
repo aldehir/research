@@ -21,7 +21,7 @@
 - [ ] 17 — Save reading position per paper `TODO`
 - [x] 18 — Add subpixel antialiasing to PDF rendering `COMPLETE`
 - [ ] 19 — Fix scaling when first page is smaller than others `COMPLETE`
-- [ ] 20 — URL-based paper routing `TODO`
+- [x] 20 — URL-based paper routing `COMPLETE`
 - [x] 21 — Fix chat selection dropdown `COMPLETE`
 - [x] 22 — Overlay delete icon in paper side menu `COMPLETE`
 - [x] 23 — Add resize handles to side panels in desktop view `COMPLETE`
@@ -35,3 +35,5 @@
 - [x] 31 — Add CLI parsing with cobra, rename binary to research-server `COMPLETE`
 - [x] 32 — Shift theme hues from blue to purple `COMPLETE`
 - [x] 33 — Remove system theme selection `COMPLETE`
+- [ ] 34 — Resizable ToC panel `TODO`
+- [ ] 35 — Hideable sidebar panel in desktop view `TODO`

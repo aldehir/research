@@ -2,6 +2,7 @@
 	import { papersStore } from '$lib/papers.svelte';
 	import type { Paper } from '$lib/api';
 	import { Icon, X } from '$lib/icons';
+	import { goto } from '$app/navigation';
 
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', {
@@ -18,13 +19,17 @@
 	}
 
 	function handleSelect(paper: Paper) {
-		papersStore.select(paper.id);
+		goto(`/papers/${paper.id}`);
 	}
 
 	async function handleDelete(event: Event, paper: Paper) {
 		event.stopPropagation();
 		if (window.confirm(`Delete "${paper.title}"?`)) {
+			const wasSelected = papersStore.selectedId === paper.id;
 			await papersStore.remove(paper.id);
+			if (wasSelected) {
+				goto('/');
+			}
 		}
 	}
 </script>

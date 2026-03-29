@@ -23,6 +23,17 @@ class PapersStore {
 		this.selectedId = id;
 	}
 
+	deselect(): void {
+		this.selectedId = null;
+	}
+
+	async loadAndSelect(id: string): Promise<void> {
+		if (this.papers.length === 0) {
+			await this.load();
+		}
+		this.selectedId = id;
+	}
+
 	async upload(file: File): Promise<void> {
 		await uploadPaper(file);
 		await this.load();

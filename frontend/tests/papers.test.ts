@@ -5,7 +5,8 @@ import { papersStore } from '$lib/papers.svelte';
 vi.mock('$lib/api', () => ({
 	listPapers: vi.fn(),
 	uploadPaper: vi.fn(),
-	deletePaper: vi.fn()
+	deletePaper: vi.fn(),
+	getPaper: vi.fn()
 }));
 
 const mockPaper: api.Paper = {
@@ -24,10 +25,12 @@ const mockPaper2: api.Paper = {
 	created_at: '2026-01-02T00:00:00Z'
 };
 
-beforeEach(() => {
+beforeEach(async () => {
 	vi.restoreAllMocks();
 	// Reset store state by loading empty
 	vi.mocked(api.listPapers).mockResolvedValue([]);
+	await papersStore.load();
+	papersStore.deselect();
 });
 
 describe('paper store', () => {
@@ -121,5 +124,50 @@ describe('paper store', () => {
 		await papersStore.remove(mockPaper.id);
 
 		expect(papersStore.selectedPaper).toBeNull();
+	});
+
+	describe('deselect', () => {
+		it('clears selectedId', async () => {
+			vi.mocked(api.listPapers).mockResolvedValue([mockPaper]);
+			await papersStore.load();
+			papersStore.select(mockPaper.id);
+			expect(papersStore.selectedPaper).toEqual(mockPaper);
+
+			papersStore.deselect();
+
+			expect(papersStore.selectedId).toBeNull();
+			expect(papersStore.selectedPaper).toBeNull();
+		});
+	});
+
+	describe('loadAndSelect', () => {
+		it('loads papers then selects by id', async () => {
+			vi.mocked(api.listPapers).mockResolvedValue([mockPaper, mockPaper2]);
+
+			await papersStore.loadAndSelect(mockPaper2.id);
+
+			expect(api.listPapers).toHaveBeenCalled();
+			expect(papersStore.selectedPaper).toEqual(mockPaper2);
+		});
+
+		it('skips loading if papers already loaded', async () => {
+			vi.mocked(api.listPapers).mockResolvedValue([mockPaper, mockPaper2]);
+			await papersStore.load();
+			vi.mocked(api.listPapers).mockClear();
+
+			await papersStore.loadAndSelect(mockPaper.id);
+
+			expect(api.listPapers).not.toHaveBeenCalled();
+			expect(papersStore.selectedPaper).toEqual(mockPaper);
+		});
+
+		it('selects id even if paper not in list (direct navigation)', async () => {
+			vi.mocked(api.listPapers).mockResolvedValue([]);
+
+			await papersStore.loadAndSelect('nonexistent-id');
+
+			expect(papersStore.selectedId).toBe('nonexistent-id');
+			expect(papersStore.selectedPaper).toBeNull();
+		});
 	});
 });
