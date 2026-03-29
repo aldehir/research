@@ -7,9 +7,10 @@
 		entries: TocEntry[];
 		currentPage: number;
 		onNavigate: (pageNumber: number) => void;
+		width?: number;
 	}
 
-	let { entries, currentPage, onNavigate }: Props = $props();
+	let { entries, currentPage, onNavigate, width }: Props = $props();
 
 	let activeEntry = $derived(findActiveTocEntry(entries, currentPage));
 
@@ -62,7 +63,7 @@
 	{/each}
 {/snippet}
 
-<div class="toc-panel">
+<div class="toc-panel" style:width={width ? `${width}px` : undefined}>
 	<div class="toc-header">
 		<h3>Contents</h3>
 	</div>

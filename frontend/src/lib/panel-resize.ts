@@ -1,10 +1,14 @@
 export const SIDEBAR_MIN = 180;
-export const SIDEBAR_MAX = 480;
+export const SIDEBAR_MAX = 640;
 export const SIDEBAR_DEFAULT = 280;
 
 export const CHAT_MIN = 240;
-export const CHAT_MAX = 600;
+export const CHAT_MAX = 800;
 export const CHAT_DEFAULT = 360;
+
+export const TOC_MIN = 160;
+export const TOC_MAX = 480;
+export const TOC_DEFAULT = 260;
 
 export const CENTER_MIN = 300;
 
@@ -13,6 +17,7 @@ const STORAGE_KEY = 'panel-widths';
 export interface PanelWidths {
   sidebar: number;
   chat: number;
+  toc: number;
 }
 
 export function clampWidth(value: number, min: number, max: number): number {
@@ -56,8 +61,11 @@ export function loadPanelWidths(): PanelWidths | null {
   const obj = parsed as Record<string, unknown>;
   if (typeof obj.sidebar !== 'number' || typeof obj.chat !== 'number') return null;
 
+  const toc = typeof obj.toc === 'number' ? obj.toc : TOC_DEFAULT;
+
   return {
     sidebar: clampWidth(obj.sidebar, SIDEBAR_MIN, SIDEBAR_MAX),
-    chat: clampWidth(obj.chat, CHAT_MIN, CHAT_MAX)
+    chat: clampWidth(obj.chat, CHAT_MIN, CHAT_MAX),
+    toc: clampWidth(toc, TOC_MIN, TOC_MAX)
   };
 }

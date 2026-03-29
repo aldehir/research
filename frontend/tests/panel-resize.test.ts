@@ -7,6 +7,9 @@ import {
   CHAT_MIN,
   CHAT_MAX,
   CHAT_DEFAULT,
+  TOC_MIN,
+  TOC_MAX,
+  TOC_DEFAULT,
   CENTER_MIN,
   clampWidth,
   clampResize,
@@ -18,14 +21,20 @@ describe('panel-resize', () => {
   describe('constants', () => {
     it('has correct sidebar constraints', () => {
       expect(SIDEBAR_MIN).toBe(180);
-      expect(SIDEBAR_MAX).toBe(480);
+      expect(SIDEBAR_MAX).toBe(640);
       expect(SIDEBAR_DEFAULT).toBe(280);
     });
 
     it('has correct chat panel constraints', () => {
       expect(CHAT_MIN).toBe(240);
-      expect(CHAT_MAX).toBe(600);
+      expect(CHAT_MAX).toBe(800);
       expect(CHAT_DEFAULT).toBe(360);
+    });
+
+    it('has correct ToC panel constraints', () => {
+      expect(TOC_MIN).toBe(160);
+      expect(TOC_MAX).toBe(480);
+      expect(TOC_DEFAULT).toBe(260);
     });
 
     it('has correct center minimum', () => {
@@ -56,7 +65,7 @@ describe('panel-resize', () => {
   });
 
   describe('clampResize', () => {
-    const totalWidth = 1200;
+    const totalWidth = 1800;
 
     it('allows resize within constraints when center has room', () => {
       expect(clampResize('sidebar', 300, 360, totalWidth)).toBe(300);
@@ -67,7 +76,7 @@ describe('panel-resize', () => {
     });
 
     it('clamps sidebar to its maximum', () => {
-      expect(clampResize('sidebar', 500, 360, totalWidth)).toBe(SIDEBAR_MAX);
+      expect(clampResize('sidebar', 700, 360, totalWidth)).toBe(SIDEBAR_MAX);
     });
 
     it('clamps chat to its minimum', () => {
@@ -75,7 +84,7 @@ describe('panel-resize', () => {
     });
 
     it('clamps chat to its maximum', () => {
-      expect(clampResize('chat', 700, 280, totalWidth)).toBe(CHAT_MAX);
+      expect(clampResize('chat', 900, 280, totalWidth)).toBe(CHAT_MAX);
     });
 
     it('limits sidebar when center would be too narrow', () => {
@@ -113,8 +122,8 @@ describe('panel-resize', () => {
     });
 
     it('saves and loads panel widths', () => {
-      savePanelWidths({ sidebar: 300, chat: 400 });
-      expect(loadPanelWidths()).toEqual({ sidebar: 300, chat: 400 });
+      savePanelWidths({ sidebar: 300, chat: 400, toc: 280 });
+      expect(loadPanelWidths()).toEqual({ sidebar: 300, chat: 400, toc: 280 });
     });
 
     it('returns null when nothing saved', () => {
@@ -132,24 +141,29 @@ describe('panel-resize', () => {
     });
 
     it('returns null when sidebar is missing', () => {
-      localStorage.setItem('panel-widths', JSON.stringify({ chat: 400 }));
+      localStorage.setItem('panel-widths', JSON.stringify({ chat: 400, toc: 260 }));
       expect(loadPanelWidths()).toBeNull();
     });
 
     it('returns null when chat is missing', () => {
-      localStorage.setItem('panel-widths', JSON.stringify({ sidebar: 300 }));
+      localStorage.setItem('panel-widths', JSON.stringify({ sidebar: 300, toc: 260 }));
       expect(loadPanelWidths()).toBeNull();
     });
 
     it('returns null when values are not numbers', () => {
-      localStorage.setItem('panel-widths', JSON.stringify({ sidebar: 'wide', chat: 400 }));
+      localStorage.setItem('panel-widths', JSON.stringify({ sidebar: 'wide', chat: 400, toc: 260 }));
       expect(loadPanelWidths()).toBeNull();
     });
 
+    it('loads with default toc when toc is missing (backward compat)', () => {
+      localStorage.setItem('panel-widths', JSON.stringify({ sidebar: 300, chat: 400 }));
+      expect(loadPanelWidths()).toEqual({ sidebar: 300, chat: 400, toc: TOC_DEFAULT });
+    });
+
     it('clamps loaded values to valid ranges', () => {
-      savePanelWidths({ sidebar: 50, chat: 900 });
+      savePanelWidths({ sidebar: 50, chat: 900, toc: 10 });
       const loaded = loadPanelWidths();
-      expect(loaded).toEqual({ sidebar: SIDEBAR_MIN, chat: CHAT_MAX });
+      expect(loaded).toEqual({ sidebar: SIDEBAR_MIN, chat: CHAT_MAX, toc: TOC_MIN });
     });
   });
 });

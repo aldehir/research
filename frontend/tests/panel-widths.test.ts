@@ -3,13 +3,16 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getSidebarWidth,
   getChatWidth,
+  getTocWidth,
   setSidebarWidth,
   setChatWidth,
+  setTocWidth,
   initPanelWidths,
   handleSidebarResize,
-  handleChatResize
+  handleChatResize,
+  handleTocResize
 } from '$lib/panel-widths.svelte';
-import { SIDEBAR_DEFAULT, CHAT_DEFAULT, SIDEBAR_MIN, SIDEBAR_MAX, CHAT_MIN, CHAT_MAX } from '$lib/panel-resize';
+import { SIDEBAR_DEFAULT, CHAT_DEFAULT, TOC_DEFAULT, SIDEBAR_MIN, SIDEBAR_MAX, CHAT_MIN, CHAT_MAX, TOC_MIN, TOC_MAX } from '$lib/panel-resize';
 
 describe('panel-widths reactive state', () => {
   beforeEach(() => {
@@ -17,6 +20,7 @@ describe('panel-widths reactive state', () => {
     // Reset to defaults
     setSidebarWidth(SIDEBAR_DEFAULT);
     setChatWidth(CHAT_DEFAULT);
+    setTocWidth(TOC_DEFAULT);
   });
 
   describe('defaults', () => {
@@ -26,6 +30,10 @@ describe('panel-widths reactive state', () => {
 
     it('chat starts at default width', () => {
       expect(getChatWidth()).toBe(CHAT_DEFAULT);
+    });
+
+    it('toc starts at default width', () => {
+      expect(getTocWidth()).toBe(TOC_DEFAULT);
     });
   });
 
@@ -39,14 +47,20 @@ describe('panel-widths reactive state', () => {
       setChatWidth(450);
       expect(getChatWidth()).toBe(450);
     });
+
+    it('updates toc width', () => {
+      setTocWidth(300);
+      expect(getTocWidth()).toBe(300);
+    });
   });
 
   describe('initPanelWidths', () => {
     it('restores saved widths from localStorage', () => {
-      localStorage.setItem('panel-widths', JSON.stringify({ sidebar: 320, chat: 420 }));
+      localStorage.setItem('panel-widths', JSON.stringify({ sidebar: 320, chat: 420, toc: 300 }));
       initPanelWidths();
       expect(getSidebarWidth()).toBe(320);
       expect(getChatWidth()).toBe(420);
+      expect(getTocWidth()).toBe(300);
     });
 
     it('keeps defaults when nothing saved', () => {
@@ -65,27 +79,27 @@ describe('panel-widths reactive state', () => {
 
   describe('handleSidebarResize', () => {
     it('increases sidebar width on positive delta', () => {
-      handleSidebarResize(20, 1200);
+      handleSidebarResize(20, 1800);
       expect(getSidebarWidth()).toBe(SIDEBAR_DEFAULT + 20);
     });
 
     it('decreases sidebar width on negative delta', () => {
-      handleSidebarResize(-20, 1200);
+      handleSidebarResize(-20, 1800);
       expect(getSidebarWidth()).toBe(SIDEBAR_DEFAULT - 20);
     });
 
     it('clamps to sidebar minimum', () => {
-      handleSidebarResize(-500, 1200);
+      handleSidebarResize(-500, 1800);
       expect(getSidebarWidth()).toBe(SIDEBAR_MIN);
     });
 
     it('clamps to sidebar maximum', () => {
-      handleSidebarResize(500, 1200);
+      handleSidebarResize(500, 1800);
       expect(getSidebarWidth()).toBe(SIDEBAR_MAX);
     });
 
     it('saves to localStorage', () => {
-      handleSidebarResize(20, 1200);
+      handleSidebarResize(20, 1800);
       const stored = JSON.parse(localStorage.getItem('panel-widths')!);
       expect(stored.sidebar).toBe(SIDEBAR_DEFAULT + 20);
     });
@@ -93,24 +107,47 @@ describe('panel-widths reactive state', () => {
 
   describe('handleChatResize', () => {
     it('increases chat width on positive delta', () => {
-      handleChatResize(20, 1200);
+      handleChatResize(20, 1800);
       expect(getChatWidth()).toBe(CHAT_DEFAULT + 20);
     });
 
     it('clamps to chat minimum', () => {
-      handleChatResize(-500, 1200);
+      handleChatResize(-500, 1800);
       expect(getChatWidth()).toBe(CHAT_MIN);
     });
 
     it('clamps to chat maximum', () => {
-      handleChatResize(500, 1200);
+      handleChatResize(500, 1800);
       expect(getChatWidth()).toBe(CHAT_MAX);
     });
 
     it('saves to localStorage', () => {
-      handleChatResize(20, 1200);
+      handleChatResize(20, 1800);
       const stored = JSON.parse(localStorage.getItem('panel-widths')!);
       expect(stored.chat).toBe(CHAT_DEFAULT + 20);
+    });
+  });
+
+  describe('handleTocResize', () => {
+    it('increases toc width on positive delta', () => {
+      handleTocResize(20);
+      expect(getTocWidth()).toBe(TOC_DEFAULT + 20);
+    });
+
+    it('clamps to toc minimum', () => {
+      handleTocResize(-500);
+      expect(getTocWidth()).toBe(TOC_MIN);
+    });
+
+    it('clamps to toc maximum', () => {
+      handleTocResize(500);
+      expect(getTocWidth()).toBe(TOC_MAX);
+    });
+
+    it('saves to localStorage', () => {
+      handleTocResize(20);
+      const stored = JSON.parse(localStorage.getItem('panel-widths')!);
+      expect(stored.toc).toBe(TOC_DEFAULT + 20);
     });
   });
 });

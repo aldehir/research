@@ -35,6 +35,6 @@
 - [x] 31 — Add CLI parsing with cobra, rename binary to research-server `COMPLETE`
 - [x] 32 — Shift theme hues from blue to purple `COMPLETE`
 - [x] 33 — Remove system theme selection `COMPLETE`
-- [ ] 34 — Resizable ToC panel `TODO`
+- [x] 34 — Resizable ToC panel `COMPLETE`
 - [x] 35 — Hideable sidebar panel in desktop view `COMPLETE`
 - [ ] 36 — Mobile panel layout tweaks `TODO`

@@ -10,6 +10,8 @@
 	import { setPages, setCurrentPage, setSelectedText } from '$lib/pdf-context.svelte';
 	import { extractOutline, type TocEntry } from '$lib/pdf-outline';
 	import TocPanel from '$lib/TocPanel.svelte';
+	import ResizeHandle from '$lib/ResizeHandle.svelte';
+	import { getTocWidth, handleTocResize } from '$lib/panel-widths.svelte';
 	import { consumeNavigateTarget, getNavigateTarget } from '$lib/pdf-navigate.svelte';
 	import { Icon, List, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Maximize2 } from '$lib/icons';
 
@@ -68,6 +70,7 @@
 
 	let tocEntries = $state<TocEntry[]>([]);
 	let tocVisible = $state(false);
+	let isDesktop = $state(false);
 
 	let zoomDisplay = $derived(formatZoom(scale));
 	let jumpPageInput = $state('');
@@ -501,6 +504,14 @@
 	});
 
 	$effect(() => {
+		const mql = window.matchMedia('(min-width: 1024px)');
+		isDesktop = mql.matches;
+		const handler = (e: MediaQueryListEvent) => { isDesktop = e.matches; };
+		mql.addEventListener('change', handler);
+		return () => mql.removeEventListener('change', handler);
+	});
+
+	$effect(() => {
 		const id = paperId;
 		loadPdf(id);
 	});
@@ -585,7 +596,10 @@
 
 	<div class="viewer-body">
 		{#if tocVisible}
-			<TocPanel entries={tocEntries} {currentPage} onNavigate={goToPage} />
+			<TocPanel entries={tocEntries} {currentPage} onNavigate={goToPage} width={getTocWidth()} />
+			{#if isDesktop}
+				<ResizeHandle onResize={(delta) => handleTocResize(delta)} />
+			{/if}
 		{/if}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="pages-container" bind:this={scrollContainer} onscroll={handleScroll} onwheel={handleWheel}>
@@ -693,8 +707,6 @@
 	}
 
 	.viewer-body :global(.toc-panel) {
-		width: 260px;
-		min-width: 200px;
 		flex-shrink: 0;
 		border-right: 1px solid var(--color-toc-border);
 	}
