@@ -65,6 +65,35 @@
 				<button class="new-btn" onclick={handleNew} aria-label="New chat" title="New chat">
 					<Icon d={Plus} size={18} />
 				</button>
+				{#if dropdownOpen}
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div class="dropdown-backdrop" onclick={handleBackdropClick}></div>
+					<div class="dropdown">
+						{#if getSessions().length === 0}
+							<p class="dropdown-empty">No conversations yet</p>
+						{:else}
+							{#each getSessions() as session (session.id)}
+								<!-- svelte-ignore a11y_click_events_have_key_events -->
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div
+									class="dropdown-item"
+									class:active={getActiveSessionId() === session.id}
+									onclick={() => handleSelect(session.id)}
+								>
+									<span class="dropdown-item-title">{session.title}</span>
+									<button
+										class="dropdown-item-delete"
+										onclick={(e) => handleDelete(e, session.id)}
+										aria-label="Delete chat"
+									>
+										<Icon d={X} size={14} />
+									</button>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				{/if}
 			</div>
 			{#if !getIsMobile()}
 				<button class="toggle-btn" onclick={() => collapsed = true} aria-label="Close chat">
@@ -72,36 +101,6 @@
 				</button>
 			{/if}
 		</div>
-
-		{#if dropdownOpen}
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div class="dropdown-backdrop" onclick={handleBackdropClick}></div>
-			<div class="dropdown">
-				{#if getSessions().length === 0}
-					<p class="dropdown-empty">No conversations yet</p>
-				{:else}
-					{#each getSessions() as session (session.id)}
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div
-							class="dropdown-item"
-							class:active={getActiveSessionId() === session.id}
-							onclick={() => handleSelect(session.id)}
-						>
-							<span class="dropdown-item-title">{session.title}</span>
-							<button
-								class="dropdown-item-delete"
-								onclick={(e) => handleDelete(e, session.id)}
-								aria-label="Delete chat"
-							>
-								<Icon d={X} size={14} />
-							</button>
-						</div>
-					{/each}
-				{/if}
-			</div>
-		{/if}
 
 		{#if getActiveSessionId()}
 			<MessageThread />
@@ -148,6 +147,7 @@
 		gap: 0.25rem;
 		flex: 1;
 		min-width: 0;
+		position: relative;
 	}
 
 	.picker-btn {
@@ -226,8 +226,8 @@
 	.dropdown {
 		position: absolute;
 		top: 100%;
-		left: 0.5rem;
-		right: 0.5rem;
+		left: 0;
+		right: 0;
 		z-index: 200;
 		background: var(--color-bg);
 		border: 1px solid var(--color-border);
