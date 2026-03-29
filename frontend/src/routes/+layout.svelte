@@ -501,7 +501,6 @@
 	/* Mobile chat overlay */
 	.chat-overlay-wrapper {
 		width: 75vw;
-		max-width: 400px;
 		min-width: 280px;
 		display: flex;
 		flex-direction: column;
