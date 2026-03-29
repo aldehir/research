@@ -104,12 +104,18 @@
 	box-sizing: border-box;
 }
 
+html {
+	overflow: hidden;
+	overscroll-behavior: none;
+}
+
 body {
 	margin: 0;
 	padding: 0;
 	font-family: system-ui, -apple-system, sans-serif;
 	background: var(--color-bg);
 	color: var(--color-text);
+	overscroll-behavior: none;
 }
 
 /* ── Highlight.js token colors ── */

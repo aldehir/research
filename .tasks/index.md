@@ -46,3 +46,4 @@
 - [x] 42 — Reduce saturation of purple colors in dark theme `COMPLETE`
 - [x] 43 — Improve resize handles for touch devices `COMPLETE`
 - [x] 44 — Fix horizontal panning when zoomed in `COMPLETE`
+- [x] 45 — iPad fullscreen mode and overscroll bounce fix `COMPLETE`

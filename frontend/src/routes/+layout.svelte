@@ -24,7 +24,8 @@
 		isSidebarCollapsed,
 		toggleSidebarCollapsed
 	} from '$lib/panel-widths.svelte';
-	import { Icon, Menu, MessageSquare, Sun, Moon, Plus, PanelLeftOpen, PanelLeftClose } from '$lib/icons';
+	import { Icon, Menu, MessageSquare, Sun, Moon, Plus, PanelLeftOpen, PanelLeftClose, Maximize2, Minimize2 } from '$lib/icons';
+	import { isFullscreen, toggleFullscreen, initFullscreen } from '$lib/fullscreen.svelte';
 	import { onMount } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -84,6 +85,7 @@
 	onMount(() => {
 		initTheme();
 		initPanelWidths();
+		initFullscreen();
 	});
 
 	function getLayoutWidth(): number {
@@ -119,7 +121,17 @@
 </script>
 
 <div class="app-shell">
-	<header class="app-header">
+	{#if isFullscreen()}
+		<button
+			class="fullscreen-exit-pill"
+			onclick={toggleFullscreen}
+			aria-label="Exit fullscreen"
+			title="Exit fullscreen"
+		>
+			<Icon d={Minimize2} size={14} />
+		</button>
+	{/if}
+	<header class="app-header" class:hidden={isFullscreen()}>
 		{#if getIsMobile()}
 			<button
 				class="mobile-toggle sidebar-toggle"
@@ -140,6 +152,14 @@
 				{:else}
 					<Icon d={Moon} size={18} />
 				{/if}
+			</button>
+			<button
+				class="theme-toggle"
+				onclick={toggleFullscreen}
+				aria-label="Toggle fullscreen"
+				title="Toggle fullscreen"
+			>
+				<Icon d={Maximize2} size={18} />
 			</button>
 			{#if getIsMobile() && papersStore.selectedPaper}
 				<button
@@ -272,6 +292,43 @@
 		background: var(--color-header-bg);
 		color: var(--color-header-text);
 		flex-shrink: 0;
+	}
+
+	.app-header.hidden {
+		display: none;
+	}
+
+	.fullscreen-exit-pill {
+		position: fixed;
+		top: 6px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 200;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 20px;
+		border: none;
+		border-radius: 10px;
+		background: var(--color-bg-invert);
+		color: var(--color-text-on-dark);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.2s;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.fullscreen-exit-pill:hover,
+	.fullscreen-exit-pill:focus-visible {
+		opacity: 0.8;
+	}
+
+	/* Show pill on touch devices by default since there's no hover */
+	@media (pointer: coarse) {
+		.fullscreen-exit-pill {
+			opacity: 0.4;
+		}
 	}
 
 	.app-title {
@@ -411,7 +468,9 @@
 	.sidebar {
 		position: relative;
 		min-width: 0;
+		border: none;
 		border-right: 1px solid var(--color-border);
+		border-radius: 0;
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg-secondary);
@@ -461,6 +520,10 @@
 		z-index: 90;
 	}
 
+	:global([data-fullscreen]) .backdrop {
+		top: 0;
+	}
+
 	/* Slide-over panel base */
 	.mobile-overlay {
 		position: fixed;
@@ -468,6 +531,10 @@
 		bottom: 0;
 		z-index: 100;
 		transition: transform 250ms ease;
+	}
+
+	:global([data-fullscreen]) .mobile-overlay {
+		top: 0;
 	}
 
 	.mobile-overlay.from-left {
