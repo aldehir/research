@@ -716,9 +716,27 @@
 		flex-shrink: 0;
 	}
 
+	:global([data-theme="dark"]) .page-wrapper {
+		background: var(--color-bg);
+	}
+
 	.page-wrapper :global(canvas) {
 		background-color: white;
 		display: block;
+	}
+
+	:global([data-theme="dark"]) .page-wrapper :global(canvas) {
+		filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.85);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:global(:root:not([data-theme])) .page-wrapper {
+			background: var(--color-bg);
+		}
+
+		:global(:root:not([data-theme])) .page-wrapper :global(canvas) {
+			filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.85);
+		}
 	}
 
 	.status {
