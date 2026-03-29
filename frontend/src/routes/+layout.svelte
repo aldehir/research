@@ -277,8 +277,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0 1rem;
-		height: 48px;
+		padding: env(safe-area-inset-top, 0) 1rem 0;
+		min-height: 48px;
 		background: var(--color-header-bg);
 		color: var(--color-header-text);
 		flex-shrink: 0;
