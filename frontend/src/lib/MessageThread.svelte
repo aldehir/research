@@ -162,10 +162,9 @@
 	.thread {
 		flex: 1;
 		overflow-y: auto;
-		padding: 1rem;
+		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
 	}
 
 	.empty {
@@ -176,19 +175,12 @@
 	}
 
 	.message {
-		padding: 0.75rem;
-		border-radius: var(--radius);
-		max-width: 90%;
+		padding: 0.6rem 0.75rem;
+		border-bottom: 1px solid var(--color-border);
 	}
 
 	.message.user {
 		background: var(--color-primary-light);
-		align-self: flex-end;
-	}
-
-	.message.assistant {
-		background: var(--color-bg-tertiary);
-		align-self: flex-start;
 	}
 
 	.role-label {
@@ -196,7 +188,7 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		color: var(--color-text-secondary);
-		margin-bottom: 0.25rem;
+		margin-bottom: 0.2rem;
 	}
 
 	.content {
