@@ -42,3 +42,9 @@ func TestBuildSystemPrompt_MentionsLua(t *testing.T) {
 	assert.Contains(t, prompt, "Lua")
 	assert.Contains(t, prompt, "```lua")
 }
+
+func TestBuildSystemPrompt_VerticalFormatting(t *testing.T) {
+	prompt := BuildSystemPrompt(PromptContext{})
+	assert.Contains(t, prompt, "narrow")
+	assert.Contains(t, prompt, "wide table")
+}

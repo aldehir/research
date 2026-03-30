@@ -2,7 +2,7 @@
 	import MessageThread from '$lib/MessageThread.svelte';
 	import MessageInput from '$lib/MessageInput.svelte';
 	import { loadSessions, getSessions, getActiveSessionId, selectSession, deleteSession, createSession, resetChat } from '$lib/chat.svelte';
-	import { getIsMobile } from '$lib/mobile-layout.svelte';
+	import { getIsMobile, closePanel } from '$lib/mobile-layout.svelte';
 	import { Icon, PanelRightOpen, PanelRightClose, Plus, ChevronDown, X } from '$lib/icons';
 
 	interface Props {
@@ -96,7 +96,11 @@
 					</div>
 				{/if}
 			</div>
-			{#if !getIsMobile()}
+			{#if getIsMobile()}
+				<button class="close-btn" onclick={closePanel} aria-label="Close chat">
+					<Icon d={X} size={20} />
+				</button>
+			{:else}
 				<button class="toggle-btn" onclick={() => collapsed = true} aria-label="Close chat">
 					<Icon d={PanelRightClose} size={18} />
 				</button>
@@ -214,6 +218,27 @@
 	}
 
 	.toggle-btn:hover {
+		color: var(--color-text);
+		background: var(--color-surface-hover);
+	}
+
+	.close-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		background: none;
+		cursor: pointer;
+		color: var(--color-text-secondary);
+		padding: 0.25rem;
+		border-radius: var(--radius-sm);
+		flex-shrink: 0;
+		min-width: 44px;
+		min-height: 44px;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.close-btn:hover {
 		color: var(--color-text);
 		background: var(--color-surface-hover);
 	}

@@ -500,12 +500,10 @@
 
 	/* Mobile chat overlay */
 	.chat-overlay-wrapper {
-		width: 75vw;
-		min-width: 280px;
+		width: 100vw;
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg);
-		box-shadow: -2px 0 12px var(--color-shadow);
 	}
 
 	/* On mobile, override chat panel to fill the wrapper */

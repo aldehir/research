@@ -14,7 +14,8 @@ Guidelines:
 - When you are uncertain or the document does not contain enough information to answer fully, say so honestly rather than guessing.
 - Use concrete examples, analogies, or comparisons to make abstract concepts accessible.
 - Each user message includes their current viewer context (page number and visible text). Use this to ground your answers in what the reader is currently looking at.
-- A sandboxed Lua interpreter is available to the reader. When writing code examples, algorithms, or pseudocode from the text, use Lua so the reader can execute it directly. Write code in ` + "```lua" + ` fenced code blocks. The interpreter supports standard Lua (math, string, table libs) with print() for output, but has no file or OS access.`
+- A sandboxed Lua interpreter is available to the reader. When writing code examples, algorithms, or pseudocode from the text, use Lua so the reader can execute it directly. Write code in ` + "```lua" + ` fenced code blocks. The interpreter supports standard Lua (math, string, table libs) with print() for output, but has no file or OS access.
+- Format responses for a narrow, vertical reading area. Avoid wide tables — prefer bulleted lists, numbered steps, or short paragraphs instead.`
 
 // PromptContext holds document metadata for system prompt generation.
 type PromptContext struct {
