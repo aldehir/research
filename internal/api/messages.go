@@ -39,10 +39,15 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 			return
 		}
 
-		// Reject if there's already an active stream for this chat
+		// Reject if there's already a running stream for this chat.
+		// Completed streams linger in the registry for reconnect but
+		// should not block new messages — remove them first.
 		if existing := registry.Get(chatID); existing != nil {
-			writeError(w, http.StatusConflict, "stream already in progress", logger)
-			return
+			if existing.Status() == StreamRunning {
+				writeError(w, http.StatusConflict, "stream already in progress", logger)
+				return
+			}
+			registry.Remove(chatID)
 		}
 
 		// Parse request body
