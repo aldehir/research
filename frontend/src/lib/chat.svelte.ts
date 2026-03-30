@@ -22,7 +22,6 @@ let messageSegments = $state(new Map<string, StreamSegment[]>());
 let messageAttachments = $state(new Map<string, MessageAttachment[]>());
 let isStreaming = $state(false);
 let activeStreamChatId: string | null = null;
-let activeStreamAbort: AbortController | null = null;
 let toolCallHandler = $state<((tool: ToolCall) => void) | null>(null);
 
 export async function loadSessions(paperId: string): Promise<void> {
@@ -40,7 +39,6 @@ function isDraft(id: string): boolean {
 /** Detach from an active stream without aborting it. The backend continues
  *  processing in the background. */
 function detachStream(): void {
-	activeStreamAbort = null;
 	activeStreamChatId = null;
 	streamingContent = '';
 	streamSegments = [];
@@ -130,9 +128,7 @@ export async function sendChatMessage(
 	if (attachments && attachments.length > 0) {
 		messageAttachments = new Map(messageAttachments).set(userMessage.id, attachments);
 	}
-	const abortController = new AbortController();
 	activeStreamChatId = resolvedChatId;
-	activeStreamAbort = abortController;
 	isStreaming = true;
 	streamingContent = '';
 	streamSegments = [];
@@ -167,7 +163,7 @@ export async function sendChatMessage(
 			streamSegments = [];
 			isStreaming = false;
 			activeStreamChatId = null;
-			activeStreamAbort = null;
+
 		},
 		(error: string) => {
 			if (isStale()) return;
@@ -176,7 +172,7 @@ export async function sendChatMessage(
 			streamSegments = [];
 			isStreaming = false;
 			activeStreamChatId = null;
-			activeStreamAbort = null;
+
 		},
 		currentPage,
 		(tool: ToolCall) => {
@@ -203,8 +199,7 @@ export async function sendChatMessage(
 				}
 			}
 		},
-		attachments,
-		abortController.signal
+		attachments
 	);
 }
 

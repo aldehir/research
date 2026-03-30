@@ -19,7 +19,6 @@ import (
 	"github.com/aldehir/research/internal/store"
 )
 
-
 type attachment struct {
 	ImageData string `json:"image_data"`
 	Text      string `json:"text"`

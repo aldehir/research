@@ -46,11 +46,9 @@ describe('switching chat during streaming', () => {
 	it('aborts active stream and clears streaming state on session switch', async () => {
 		// Start streaming in chat A — keep the stream alive via a deferred promise
 		let resolveStream!: () => void;
-		let capturedSignal: AbortSignal | undefined;
 
 		vi.mocked(sendMessage).mockImplementation(
-			async (_p, _c, _content, onDelta, _onDone, _onError, _ctx, _onTool, _onResult, _att, signal) => {
-				capturedSignal = signal;
+			async (_p, _c, _content, onDelta, _onDone, _onError, _ctx, _onTool, _onResult, _att) => {
 				onDelta('Hello from A');
 				// Stream stays alive until resolved
 				await new Promise<void>(r => { resolveStream = r; });
@@ -78,10 +76,6 @@ describe('switching chat during streaming', () => {
 		expect(getIsStreaming()).toBe(false);
 		expect(getStreamingContent()).toBe('');
 		expect(getStreamSegments()).toEqual([]);
-
-		// With background streaming, detachStream does NOT abort — the backend
-		// continues processing. The signal remains unaborted.
-		expect(capturedSignal?.aborted).toBe(false);
 
 		// Chat B's messages should be loaded, not contaminated
 		const msgs = getMessages();
@@ -129,12 +123,9 @@ describe('switching chat during streaming', () => {
 		expect(getIsStreaming()).toBe(false);
 	});
 
-	it('creating new chat during streaming aborts stream and clears state', async () => {
-		let capturedSignal: AbortSignal | undefined;
-
+	it('creating new chat during streaming detaches stream and clears state', async () => {
 		vi.mocked(sendMessage).mockImplementation(
-			async (_p, _c, _content, onDelta, _onDone, _onError, _ctx, _onTool, _onResult, _att, signal) => {
-				capturedSignal = signal;
+			async (_p, _c, _content, onDelta, _onDone, _onError, _ctx, _onTool, _onResult, _att) => {
 				onDelta('Hello from A');
 				await new Promise<void>(() => {});
 			}
@@ -147,14 +138,12 @@ describe('switching chat during streaming', () => {
 		expect(getIsStreaming()).toBe(true);
 		expect(getStreamingContent()).toBe('Hello from A');
 
-		// Create a new chat — should abort the stream
+		// Create a new chat — should detach the stream
 		await createSession(paperId);
 
 		expect(getIsStreaming()).toBe(false);
 		expect(getStreamingContent()).toBe('');
 		expect(getStreamSegments()).toEqual([]);
-		// detachStream does NOT abort — backend continues in background
-		expect(capturedSignal?.aborted).toBe(false);
 
 		// New chat should have no messages
 		expect(getMessages()).toEqual([]);
