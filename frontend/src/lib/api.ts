@@ -178,20 +178,47 @@ export interface MessageAttachment {
 	page: number;
 }
 
-export interface SSECallbacks {
-	onDelta: (text: string) => void;
-	onDone: () => void;
-	onError: (error: string) => void;
-	onToolCall?: (tool: ToolCall) => void;
-	onToolResult?: (result: ToolResult) => void;
-}
-
-async function consumeSSEStream(
-	response: Response,
-	callbacks: SSECallbacks,
+export async function sendMessage(
+	paperId: string,
+	chatId: string,
+	content: string,
+	onDelta: (text: string) => void,
+	onDone: () => void,
+	onError: (error: string) => void,
+	currentPage?: number,
+	onToolCall?: (tool: ToolCall) => void,
+	onToolResult?: (result: ToolResult) => void,
+	attachments?: MessageAttachment[],
 	signal?: AbortSignal
 ): Promise<void> {
-	const { onDelta, onDone, onError, onToolCall, onToolResult } = callbacks;
+	const reqBody: Record<string, unknown> = { content };
+	if (currentPage) {
+		reqBody.current_page = currentPage;
+	}
+	if (attachments && attachments.length > 0) {
+		reqBody.attachments = attachments;
+	}
+
+	let response: Response;
+	try {
+		response = await fetch(`/api/papers/${paperId}/chats/${chatId}/messages`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(reqBody),
+			signal
+		});
+	} catch (err) {
+		if (signal?.aborted) return;
+		onError(err instanceof Error ? err.message : 'Network error');
+		return;
+	}
+
+	if (!response.ok) {
+		const body = await response.json() as { error: string };
+		onError(body.error);
+		return;
+	}
+
 	const reader = response.body!.getReader();
 	const decoder = new TextDecoder();
 	let buffer = '';
@@ -238,79 +265,4 @@ async function consumeSSEStream(
 		if (signal?.aborted) return;
 		onError(err instanceof Error ? err.message : 'Stream error');
 	}
-}
-
-export async function sendMessage(
-	paperId: string,
-	chatId: string,
-	content: string,
-	onDelta: (text: string) => void,
-	onDone: () => void,
-	onError: (error: string) => void,
-	currentPage?: number,
-	onToolCall?: (tool: ToolCall) => void,
-	onToolResult?: (result: ToolResult) => void,
-	attachments?: MessageAttachment[],
-	signal?: AbortSignal
-): Promise<void> {
-	const reqBody: Record<string, unknown> = { content };
-	if (currentPage) {
-		reqBody.current_page = currentPage;
-	}
-	if (attachments && attachments.length > 0) {
-		reqBody.attachments = attachments;
-	}
-
-	let response: Response;
-	try {
-		response = await fetch(`/api/papers/${paperId}/chats/${chatId}/messages`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(reqBody),
-			signal
-		});
-	} catch (err) {
-		if (signal?.aborted) return;
-		onError(err instanceof Error ? err.message : 'Network error');
-		return;
-	}
-
-	if (!response.ok) {
-		if (response.status === 409) {
-			// Stream already in progress — caller can reconnect instead
-			onError('stream already in progress');
-			return;
-		}
-		const body = await response.json() as { error: string };
-		onError(body.error);
-		return;
-	}
-
-	await consumeSSEStream(response, { onDelta, onDone, onError, onToolCall, onToolResult }, signal);
-}
-
-/**
- * Reconnect to an in-progress or recently-completed background stream.
- * Returns true if reconnected, false if no active stream (404).
- * When true, the stream is consumed asynchronously via callbacks — the
- * promise resolves immediately after the connection is established.
- */
-export async function reconnectStream(
-	paperId: string,
-	chatId: string,
-	callbacks: SSECallbacks,
-	signal?: AbortSignal
-): Promise<boolean> {
-	let response: Response;
-	try {
-		response = await fetch(`/api/papers/${paperId}/chats/${chatId}/stream`, { signal });
-	} catch {
-		return false;
-	}
-	if (response.status === 404) return false;
-	if (!response.ok) return false;
-
-	// Fire and forget — callbacks handle state updates
-	consumeSSEStream(response, callbacks, signal);
-	return true;
 }

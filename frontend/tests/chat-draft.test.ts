@@ -6,8 +6,7 @@ vi.mock('$lib/api', () => ({
 	createChatSession: vi.fn(),
 	getChatSession: vi.fn(),
 	deleteChatSession: vi.fn(),
-	sendMessage: vi.fn(),
-	reconnectStream: vi.fn().mockResolvedValue(false)
+	sendMessage: vi.fn()
 }));
 
 // Mock uuid
