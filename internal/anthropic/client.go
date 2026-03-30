@@ -139,13 +139,9 @@ type Message struct {
 }
 
 type Request struct {
-	Messages       []Message
-	SystemPrompt   string
-	DocumentTitle  string
-	DocumentAuthor string
-	DocumentDate   string
-	TotalPages     int
-	Tools          []Tool
+	Messages     []Message
+	SystemPrompt string
+	Tools        []Tool
 }
 
 type StreamEvent struct {
@@ -261,21 +257,11 @@ type sseContentBlock struct {
 func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, error) {
 	log := c.logger()
 
-	systemPrompt := req.SystemPrompt
-	if systemPrompt == "" {
-		systemPrompt = BuildSystemPromptFromContext(PromptContext{
-			DocumentTitle:  req.DocumentTitle,
-			DocumentAuthor: req.DocumentAuthor,
-			DocumentDate:   req.DocumentDate,
-			TotalPages:     req.TotalPages,
-		})
-	}
-
 	body := apiRequest{
 		Model:     c.Model,
 		MaxTokens: 4096,
 		Stream:    true,
-		System:    systemPrompt,
+		System:    req.SystemPrompt,
 		Messages:  req.Messages,
 		Tools:     req.Tools,
 	}
@@ -296,7 +282,7 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamEvent, e
 
 	log.Info("stream starting", "model", c.Model, "messages", len(req.Messages))
 	log.Debug("request details",
-		"system_prompt_length", len(systemPrompt),
+		"system_prompt_length", len(req.SystemPrompt),
 		"tool_count", len(req.Tools),
 		"message_count", len(req.Messages),
 	)
