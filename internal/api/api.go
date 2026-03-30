@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/aldehir/research/internal/chat"
 	luaeval "github.com/aldehir/research/internal/lua"
@@ -15,7 +16,8 @@ import (
 type MuxOption func(*muxConfig)
 
 type muxConfig struct {
-	dataDir string
+	dataDir      string
+	retentionTTL time.Duration
 }
 
 // WithDataDir sets the data directory for storing attachment images.
@@ -23,10 +25,20 @@ func WithDataDir(dir string) MuxOption {
 	return func(c *muxConfig) { c.dataDir = dir }
 }
 
+// WithRetentionTTL sets how long completed streams are retained for reconnection.
+func WithRetentionTTL(d time.Duration) MuxOption {
+	return func(c *muxConfig) { c.retentionTTL = d }
+}
+
 func NewMux(db *sql.DB, storage *pdf.Storage, provider chat.Provider, luaEval *luaeval.Evaluator, logger *slog.Logger, opts ...MuxOption) *http.ServeMux {
 	var cfg muxConfig
 	for _, opt := range opts {
 		opt(&cfg)
+	}
+
+	registry := NewStreamRegistry(logger)
+	if cfg.retentionTTL > 0 {
+		registry.RetentionTTL = cfg.retentionTTL
 	}
 
 	mux := http.NewServeMux()
@@ -43,7 +55,8 @@ func NewMux(db *sql.DB, storage *pdf.Storage, provider chat.Provider, luaEval *l
 	mux.Handle("GET /api/papers/{id}/chats/{chatId}", wrap(handleGetChatSession(db, logger)))
 	mux.Handle("DELETE /api/papers/{id}/chats/{chatId}", wrap(handleDeleteChatSession(db, logger)))
 	mux.Handle("POST /api/papers/{id}/region", wrap(handleExtractRegion(db, storage, logger)))
-	mux.Handle("POST /api/papers/{id}/chats/{chatId}/messages", wrap(handleSendMessage(db, storage, provider, cfg.dataDir, logger)))
+	mux.Handle("POST /api/papers/{id}/chats/{chatId}/messages", wrap(handleSendMessage(db, storage, provider, cfg.dataDir, registry, logger)))
+	mux.Handle("GET /api/papers/{id}/chats/{chatId}/stream", wrap(handleReconnectStream(registry, logger)))
 	mux.Handle("GET /api/attachments/{id}/image", wrap(handleGetAttachmentImage(db, logger)))
 	if luaEval != nil {
 		mux.Handle("POST /api/lua/eval", wrap(handleEvalLua(luaEval, logger)))

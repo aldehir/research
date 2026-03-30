@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -18,6 +19,7 @@ import (
 	"github.com/aldehir/research/internal/store"
 )
 
+
 type attachment struct {
 	ImageData string `json:"image_data"`
 	Text      string `json:"text"`
@@ -26,7 +28,7 @@ type attachment struct {
 
 const maxToolLoopIterations = 10
 
-func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider, dataDir string, logger *slog.Logger) http.HandlerFunc {
+func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider, dataDir string, registry *StreamRegistry, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		paperID := r.PathValue("id")
 		chatID := r.PathValue("chatId")
@@ -34,6 +36,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 		// Check if provider is available
 		if provider == nil {
 			writeError(w, http.StatusServiceUnavailable, "chat features unavailable", logger)
+			return
+		}
+
+		// Reject if there's already an active stream for this chat
+		if existing := registry.Get(chatID); existing != nil {
+			writeError(w, http.StatusConflict, "stream already in progress", logger)
 			return
 		}
 
@@ -214,165 +222,228 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 			Tools:    chat.PDFTools(),
 		}
 
-		// Set SSE headers before calling Stream
+		// Start background stream
+		stream, bgCtx := registry.Start(chatID)
+
+		// Set SSE headers
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 
 		flusher, _ := w.(http.Flusher)
-		flush := func() {
-			if flusher != nil {
-				flusher.Flush()
-			}
-		}
 
-		sendSSE := func(v any) {
-			fmt.Fprintf(w, "data: %s\n\n", mustJSON(v))
-			flush()
-		}
+		// Launch tool loop in a background goroutine
+		go runToolLoop(bgCtx, stream, registry, db, provider, req, chatID, paperID, pdfPath, logger)
 
-		var fullText strings.Builder
-		responseStart := time.Now()
-		var toolIterations int
+		// Relay events from the background stream to this HTTP response
+		relayEvents(r.Context(), stream, w, flusher)
+	}
+}
 
-		// Tool execution loop
-		for i := 0; i < maxToolLoopIterations; i++ {
-			ch, err := provider.Stream(r.Context(), req)
-			if err != nil {
-				logger.Error("stream start failed", "chat_id", chatID, "error", err)
-				sendSSE(sseResponse{Type: "error", Error: err.Error()})
-				return
-			}
+// runToolLoop executes the LLM streaming and tool execution loop in the
+// background. It writes SSE events to the ActiveStream buffer and persists
+// the final assistant message to the database.
+func runToolLoop(
+	ctx context.Context,
+	stream *ActiveStream,
+	registry *StreamRegistry,
+	db *sql.DB,
+	provider chat.Provider,
+	req chat.Request,
+	chatID, paperID, pdfPath string,
+	logger *slog.Logger,
+) {
+	defer func() {
+		stream.SetStatus(StreamDone)
+		// Schedule cleanup after a retention period
+		ttl := registry.RetentionTTL
+		go func() {
+			time.Sleep(ttl)
+			registry.Remove(chatID)
+		}()
+	}()
 
-			var toolCalls []chat.ToolCall
-			var iterationText strings.Builder
-			for ev := range ch {
-				switch ev.Kind {
-				case chat.EventDelta:
-					fullText.WriteString(ev.Text)
-					iterationText.WriteString(ev.Text)
-					sendSSE(sseResponse{Type: "delta", Text: ev.Text})
-				case chat.EventToolCall:
-					if ev.ToolCall != nil {
-						toolCalls = append(toolCalls, *ev.ToolCall)
-					}
-				case chat.EventDone:
-					// Don't emit done yet if we have tool calls to process
-				}
-			}
+	emit := func(v any) {
+		registry.Append(stream, SSEEvent{Data: mustJSON(v)})
+	}
 
-			if len(toolCalls) == 0 {
-				// No tool calls — we're done
-				sendSSE(sseResponse{Type: "done"})
-				break
-			}
+	var fullText strings.Builder
+	responseStart := time.Now()
+	var toolIterations int
 
-			toolIterations++
-			logger.Info("tool_loop_iteration", "iteration", toolIterations, "tool_call_count", len(toolCalls))
-
-			// Process tool calls
-			// Build assistant message with tool call parts (include preceding text if any)
-			var assistantParts []chat.Part
-			if iterationText.Len() > 0 {
-				assistantParts = append(assistantParts, chat.Part{
-					Kind: chat.PartText,
-					Text: iterationText.String(),
-				})
-			}
-			for _, tc := range toolCalls {
-				logger.Debug("tool_call", "name", tc.Name, "args", string(tc.Input))
-				assistantParts = append(assistantParts, chat.Part{
-					Kind:     chat.PartToolCall,
-					ToolCall: &chat.ToolCall{ID: tc.ID, Name: tc.Name, Input: tc.Input},
-				})
-
-				// Send tool_call SSE to client for UI
-				sendSSE(sseToolCall{
-					Type: "tool_call",
-					Name: tc.Name,
-					Args: json.RawMessage(tc.Input),
-				})
-			}
-
-			// Append assistant tool_use message to request
-			assistantMsg := chat.Message{
-				Role:  chat.RoleAssistant,
-				Parts: assistantParts,
-			}
-			req.Messages = append(req.Messages, assistantMsg)
-
-			// Persist assistant tool_use message
-			persistParts(db, chatID, "assistant", assistantParts, logger)
-
-			// Execute tools and build tool_result parts
-			tctx := toolContext{db: db, paperID: paperID, pdfPath: pdfPath}
-			var resultParts []chat.Part
-			for _, tc := range toolCalls {
-				toolStart := time.Now()
-				result := executeToolCall(tc.Name, string(tc.Input), tctx, logger)
-				logger.Info("tool_result",
-					"name", tc.Name,
-					"content_type", result.contentType,
-					"result_length", len(result.text),
-					"duration", time.Since(toolStart),
-				)
-
-				part := chat.Part{
-					Kind: chat.PartToolResult,
-					ToolResult: &chat.ToolResult{
-						ToolCallID: tc.ID,
-					},
-				}
-				sse := sseToolResult{
-					Type: "tool_result",
-					Name: tc.Name,
-				}
-
-				if result.contentType == "image" {
-					part.ToolResult.Image = result.image
-					sse.ContentType = "image"
-					sse.ImageData = result.imageData
-					sse.Text = fmt.Sprintf("Rendered page %s as image", string(tc.Input))
-					sse.Preview = "Page snapshot rendered"
-				} else {
-					part.ToolResult.Content = result.text
-					sse.Text = result.text
-					sse.Preview = truncatePreview(result.text, toolResultPreviewLen)
-				}
-
-				resultParts = append(resultParts, part)
-				sendSSE(sse)
-			}
-
-			// Append user message with tool_result parts
-			req.Messages = append(req.Messages, chat.Message{
-				Role:  chat.RoleUser,
-				Parts: resultParts,
-			})
-
-			// Persist user tool_result message
-			persistParts(db, chatID, "user", resultParts, logger)
-		}
-
-		logger.Info("response_complete",
-			"response_length", fullText.Len(),
-			"tool_iterations", toolIterations,
-			"total_duration", time.Since(responseStart),
-		)
-
-		// Store final assistant message
-		assistantID, err := newUUID()
+	// Tool execution loop
+	for i := 0; i < maxToolLoopIterations; i++ {
+		ch, err := provider.Stream(ctx, req)
 		if err != nil {
+			logger.Error("stream start failed", "chat_id", chatID, "error", err)
+			emit(sseResponse{Type: "error", Error: err.Error()})
+			stream.SetStatus(StreamError)
 			return
 		}
-		assistantMsg := store.Message{
-			ID:            assistantID,
-			ChatSessionID: chatID,
-			Role:          "assistant",
-			Content:       fullText.String(),
-			CreatedAt:     time.Now().UTC().Format(time.RFC3339),
+
+		var toolCalls []chat.ToolCall
+		var iterationText strings.Builder
+		for ev := range ch {
+			switch ev.Kind {
+			case chat.EventDelta:
+				fullText.WriteString(ev.Text)
+				iterationText.WriteString(ev.Text)
+				emit(sseResponse{Type: "delta", Text: ev.Text})
+			case chat.EventToolCall:
+				if ev.ToolCall != nil {
+					toolCalls = append(toolCalls, *ev.ToolCall)
+				}
+			case chat.EventDone:
+				// Don't emit done yet if we have tool calls to process
+			}
 		}
-		store.CreateMessage(db, assistantMsg)
+
+		if len(toolCalls) == 0 {
+			// No tool calls — we're done
+			emit(sseResponse{Type: "done"})
+			break
+		}
+
+		toolIterations++
+		logger.Info("tool_loop_iteration", "iteration", toolIterations, "tool_call_count", len(toolCalls))
+
+		// Process tool calls
+		// Build assistant message with tool call parts (include preceding text if any)
+		var assistantParts []chat.Part
+		if iterationText.Len() > 0 {
+			assistantParts = append(assistantParts, chat.Part{
+				Kind: chat.PartText,
+				Text: iterationText.String(),
+			})
+		}
+		for _, tc := range toolCalls {
+			logger.Debug("tool_call", "name", tc.Name, "args", string(tc.Input))
+			assistantParts = append(assistantParts, chat.Part{
+				Kind:     chat.PartToolCall,
+				ToolCall: &chat.ToolCall{ID: tc.ID, Name: tc.Name, Input: tc.Input},
+			})
+
+			// Send tool_call SSE to client for UI
+			emit(sseToolCall{
+				Type: "tool_call",
+				Name: tc.Name,
+				Args: json.RawMessage(tc.Input),
+			})
+		}
+
+		// Append assistant tool_use message to request
+		assistantMsg := chat.Message{
+			Role:  chat.RoleAssistant,
+			Parts: assistantParts,
+		}
+		req.Messages = append(req.Messages, assistantMsg)
+
+		// Persist assistant tool_use message
+		persistParts(db, chatID, "assistant", assistantParts, logger)
+
+		// Execute tools and build tool_result parts
+		tctx := toolContext{db: db, paperID: paperID, pdfPath: pdfPath}
+		var resultParts []chat.Part
+		for _, tc := range toolCalls {
+			toolStart := time.Now()
+			result := executeToolCall(tc.Name, string(tc.Input), tctx, logger)
+			logger.Info("tool_result",
+				"name", tc.Name,
+				"content_type", result.contentType,
+				"result_length", len(result.text),
+				"duration", time.Since(toolStart),
+			)
+
+			part := chat.Part{
+				Kind: chat.PartToolResult,
+				ToolResult: &chat.ToolResult{
+					ToolCallID: tc.ID,
+				},
+			}
+			sse := sseToolResult{
+				Type: "tool_result",
+				Name: tc.Name,
+			}
+
+			if result.contentType == "image" {
+				part.ToolResult.Image = result.image
+				sse.ContentType = "image"
+				sse.ImageData = result.imageData
+				sse.Text = fmt.Sprintf("Rendered page %s as image", string(tc.Input))
+				sse.Preview = "Page snapshot rendered"
+			} else {
+				part.ToolResult.Content = result.text
+				sse.Text = result.text
+				sse.Preview = truncatePreview(result.text, toolResultPreviewLen)
+			}
+
+			resultParts = append(resultParts, part)
+			emit(sse)
+		}
+
+		// Append user message with tool_result parts
+		req.Messages = append(req.Messages, chat.Message{
+			Role:  chat.RoleUser,
+			Parts: resultParts,
+		})
+
+		// Persist user tool_result message
+		persistParts(db, chatID, "user", resultParts, logger)
+	}
+
+	logger.Info("response_complete",
+		"response_length", fullText.Len(),
+		"tool_iterations", toolIterations,
+		"total_duration", time.Since(responseStart),
+	)
+
+	// Store final assistant message
+	assistantID, err := newUUID()
+	if err != nil {
+		return
+	}
+	assistantMsg := store.Message{
+		ID:            assistantID,
+		ChatSessionID: chatID,
+		Role:          "assistant",
+		Content:       fullText.String(),
+		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
+	}
+	store.CreateMessage(db, assistantMsg)
+}
+
+// relayEvents reads events from the ActiveStream buffer and writes them as
+// SSE to the HTTP response. Returns when the stream completes or the HTTP
+// client disconnects.
+func relayEvents(httpCtx context.Context, stream *ActiveStream, w http.ResponseWriter, flusher http.Flusher) {
+	flush := func() {
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+
+	offset := 0
+	for {
+		events, done := stream.EventsSince(offset)
+		for _, ev := range events {
+			fmt.Fprintf(w, "data: %s\n\n", ev.Data)
+			flush()
+			offset++
+		}
+		if done {
+			return
+		}
+		// Capture notify channel, then recheck for events that may have
+		// arrived between EventsSince and Notify (avoids lost wakeup).
+		ch := stream.Notify()
+		if events, done = stream.EventsSince(offset); len(events) > 0 || done {
+			continue
+		}
+		select {
+		case <-httpCtx.Done():
+			return
+		case <-ch:
+		}
 	}
 }
 
@@ -458,6 +529,25 @@ func buildPartsFromPersistedAttachments(content string, atts []store.Attachment,
 	}
 
 	return parts, nil
+}
+
+func handleReconnectStream(registry *StreamRegistry, logger *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		chatID := r.PathValue("chatId")
+
+		stream := registry.Get(chatID)
+		if stream == nil {
+			writeError(w, http.StatusNotFound, "no active stream", logger)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		flusher, _ := w.(http.Flusher)
+		relayEvents(r.Context(), stream, w, flusher)
+	}
 }
 
 type sseResponse struct {

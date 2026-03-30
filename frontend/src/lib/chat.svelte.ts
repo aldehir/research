@@ -3,7 +3,8 @@ import {
 	createChatSession,
 	getChatSession,
 	deleteChatSession,
-	sendMessage
+	sendMessage,
+	reconnectStream
 } from '$lib/api';
 import type { ChatSession, Message, ToolCall, ToolResult, MessageAttachment } from '$lib/api';
 import { generateId } from '$lib/uuid';
@@ -37,19 +38,18 @@ function isDraft(id: string): boolean {
 	return id.startsWith('draft-');
 }
 
-function abortActiveStream(): void {
-	if (activeStreamAbort) {
-		activeStreamAbort.abort();
-		activeStreamAbort = null;
-		activeStreamChatId = null;
-		streamingContent = '';
-		streamSegments = [];
-		isStreaming = false;
-	}
+/** Detach from an active stream without aborting it. The backend continues
+ *  processing in the background. */
+function detachStream(): void {
+	activeStreamAbort = null;
+	activeStreamChatId = null;
+	streamingContent = '';
+	streamSegments = [];
+	isStreaming = false;
 }
 
 export async function createSession(paperId: string): Promise<void> {
-	abortActiveStream();
+	detachStream();
 	const existingDraft = sessions.find(s => isDraft(s.id));
 	if (existingDraft) {
 		activeSessionId = existingDraft.id;
@@ -68,11 +68,83 @@ export async function createSession(paperId: string): Promise<void> {
 }
 
 export async function selectSession(paperId: string, chatId: string): Promise<void> {
-	abortActiveStream();
+	detachStream();
 	sessions = sessions.filter(s => !isDraft(s.id));
 	activeSessionId = chatId;
 	const session = await getChatSession(paperId, chatId);
 	messages = session.messages;
+
+	// Try to reconnect to an in-progress background stream
+	const abortController = new AbortController();
+	const streamChatId = chatId;
+	const isStale = () => activeSessionId !== streamChatId;
+
+	const reconnected = await reconnectStream(paperId, chatId, {
+		onDelta: (text: string) => {
+			if (isStale()) return;
+			streamingContent += text;
+			appendTextDelta(text);
+		},
+		onDone: () => {
+			if (isStale()) return;
+			const assistantMessage: Message = {
+				id: generateId(),
+				chat_session_id: chatId,
+				role: 'assistant',
+				content: streamingContent,
+				created_at: new Date().toISOString()
+			};
+			const hasToolSegments = streamSegments.some(s => s.type === 'tool');
+			if (hasToolSegments) {
+				messageSegments = new Map(messageSegments).set(assistantMessage.id, snapshotSegments());
+			}
+			messages = [...messages, assistantMessage];
+			streamingContent = '';
+			streamSegments = [];
+			isStreaming = false;
+			activeStreamChatId = null;
+			activeStreamAbort = null;
+		},
+		onError: (error: string) => {
+			if (isStale()) return;
+			console.error('Reconnect error:', error);
+			streamingContent = '';
+			streamSegments = [];
+			isStreaming = false;
+			activeStreamChatId = null;
+			activeStreamAbort = null;
+		},
+		onToolCall: (tool: ToolCall) => {
+			if (isStale()) return;
+			streamSegments.push({ type: 'tool', name: tool.name, args: tool.args });
+			if (tool.name === 'go_to_page' && typeof tool.args.page === 'number') {
+				requestGoToPage(tool.args.page);
+			}
+			if (toolCallHandler) {
+				toolCallHandler(tool);
+			}
+		},
+		onToolResult: (result: ToolResult) => {
+			if (isStale()) return;
+			for (let i = streamSegments.length - 1; i >= 0; i--) {
+				const seg = streamSegments[i];
+				if (seg.type === 'tool' && seg.name === result.name && !seg.result) {
+					seg.result = result;
+					break;
+				}
+			}
+		}
+	}, abortController.signal);
+
+	if (reconnected) {
+		// Set streaming state immediately — reconnectStream returns before
+		// consumption starts, so callbacks haven't fired yet.
+		activeStreamChatId = chatId;
+		activeStreamAbort = abortController;
+		isStreaming = true;
+	} else {
+		abortController.abort();
+	}
 }
 
 export async function deleteSession(paperId: string, chatId: string): Promise<void> {
@@ -210,7 +282,7 @@ export async function sendChatMessage(
 }
 
 export function resetChat(): void {
-	abortActiveStream();
+	detachStream();
 	sessions = [];
 	activeSessionId = null;
 	messages = [];

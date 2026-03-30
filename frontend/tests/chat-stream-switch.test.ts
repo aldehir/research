@@ -6,7 +6,8 @@ vi.mock('$lib/api', () => ({
 	createChatSession: vi.fn(),
 	getChatSession: vi.fn(),
 	deleteChatSession: vi.fn(),
-	sendMessage: vi.fn()
+	sendMessage: vi.fn(),
+	reconnectStream: vi.fn().mockResolvedValue(false)
 }));
 
 // Mock uuid
@@ -79,8 +80,9 @@ describe('switching chat during streaming', () => {
 		expect(getStreamingContent()).toBe('');
 		expect(getStreamSegments()).toEqual([]);
 
-		// The abort signal should have been triggered
-		expect(capturedSignal?.aborted).toBe(true);
+		// With background streaming, detachStream does NOT abort — the backend
+		// continues processing. The signal remains unaborted.
+		expect(capturedSignal?.aborted).toBe(false);
 
 		// Chat B's messages should be loaded, not contaminated
 		const msgs = getMessages();
@@ -152,7 +154,8 @@ describe('switching chat during streaming', () => {
 		expect(getIsStreaming()).toBe(false);
 		expect(getStreamingContent()).toBe('');
 		expect(getStreamSegments()).toEqual([]);
-		expect(capturedSignal?.aborted).toBe(true);
+		// detachStream does NOT abort — backend continues in background
+		expect(capturedSignal?.aborted).toBe(false);
 
 		// New chat should have no messages
 		expect(getMessages()).toEqual([]);

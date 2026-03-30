@@ -61,3 +61,4 @@
 - [x] 57 — Redesign PDF toolbar for mobile `COMPLETE`
 - [x] 58 — Remove chat bubbles from chat UI `COMPLETE`
 - [x] 60 — Full-screen mobile chat and vertical-optimized LLM formatting `COMPLETE`
+- [x] 61 — Background support for chat streaming `COMPLETE`

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aldehir/research/internal/chat"
 	"github.com/aldehir/research/internal/pdf"
@@ -428,7 +429,7 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Find where attention is discussed"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -504,7 +505,7 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"What's on page 1?"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -558,7 +559,7 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Go to page 5"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -615,7 +616,7 @@ func TestSendMessage_ToolResultSSE(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Go to page 3"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -679,7 +680,7 @@ func TestSendMessage_ToolResultSSE(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"What's on page 1?"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -743,7 +744,7 @@ func TestSendMessage_ToolResultSSE(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Read page 1"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -803,7 +804,7 @@ func TestSendMessage_LogsToolLoopIteration(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	mux := NewMux(tdb.DB, storage, mock, nil, logger)
+	mux := NewMux(tdb.DB, storage, mock, nil, logger, WithRetentionTTL(10*time.Millisecond))
 
 	body := `{"content":"Go to page 3"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -855,7 +856,7 @@ func TestSendMessage_LogsToolExecutionResults(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	mux := NewMux(tdb.DB, storage, mock, nil, logger)
+	mux := NewMux(tdb.DB, storage, mock, nil, logger, WithRetentionTTL(10*time.Millisecond))
 
 	body := `{"content":"Go to page 2"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -907,7 +908,7 @@ func TestSendMessage_LogsFinalResponseSummary(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	mux := NewMux(tdb.DB, storage, mock, nil, logger)
+	mux := NewMux(tdb.DB, storage, mock, nil, logger, WithRetentionTTL(10*time.Millisecond))
 
 	body := `{"content":"Show page 1"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -965,7 +966,7 @@ func TestSendMessage_SnapshotPage(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Show me the chart"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -1047,7 +1048,7 @@ func TestSendMessage_SnapshotPage(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Show me page 1"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -1109,7 +1110,7 @@ func TestSendMessage_ReadPageUsesIndex(t *testing.T) {
 		},
 	}
 
-	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 	body := `{"content":"Read page 1"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -1241,7 +1242,7 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Go to page 3"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -1313,7 +1314,7 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 			},
 		}
 
-		mux1 := NewMux(tdb.DB, storage, mock1, nil, slog.Default())
+		mux1 := NewMux(tdb.DB, storage, mock1, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body1 := `{"content":"Go to page 3"}`
 		req1 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body1))
@@ -1331,7 +1332,7 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 				},
 			},
 		}
-		mux2 := NewMux(tdb.DB, storage, mock2, nil, slog.Default())
+		mux2 := NewMux(tdb.DB, storage, mock2, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body2 := `{"content":"What did you find?"}`
 		req2 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body2))
@@ -1397,7 +1398,7 @@ func TestSendMessage_PersistsToolInteractions(t *testing.T) {
 			},
 		}
 
-		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+		mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 		body := `{"content":"Show page 1"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -1460,7 +1461,7 @@ func TestSendMessage_PersistsSnapshotPageImage(t *testing.T) {
 		},
 	}
 
-	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 	body := `{"content":"Show chart"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -1518,7 +1519,7 @@ func TestSendMessage_ReloadsPersistedAttachmentsInHistory(t *testing.T) {
 			{Kind: chat.EventDone},
 		},
 	}
-	mux1 := NewMux(tdb.DB, storage, mock1, nil, slog.Default(), WithDataDir(dataDir))
+	mux1 := NewMux(tdb.DB, storage, mock1, nil, slog.Default(), WithDataDir(dataDir), WithRetentionTTL(10*time.Millisecond))
 
 	body1 := `{"content":"What is this?","attachments":[{"image_data":"iVBORw0KGgo=","text":"Figure 1","page":3}]}`
 	req1 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body1))
@@ -1536,7 +1537,7 @@ func TestSendMessage_ReloadsPersistedAttachmentsInHistory(t *testing.T) {
 			},
 		},
 	}
-	mux2 := NewMux(tdb.DB, storage, mock2, nil, slog.Default(), WithDataDir(dataDir))
+	mux2 := NewMux(tdb.DB, storage, mock2, nil, slog.Default(), WithDataDir(dataDir), WithRetentionTTL(10*time.Millisecond))
 
 	body2 := `{"content":"Can you still see the image?"}`
 	req2 := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body2))
@@ -1586,7 +1587,7 @@ func TestSendMessage_PersistsAttachments(t *testing.T) {
 			{Kind: chat.EventDone},
 		},
 	}
-	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithDataDir(dataDir))
+	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithDataDir(dataDir), WithRetentionTTL(10*time.Millisecond))
 
 	// Send message with attachment (base64 PNG)
 	body := `{"content":"What is this?","attachments":[{"image_data":"iVBORw0KGgo=","text":"Figure 1","page":3}]}`
@@ -1644,7 +1645,7 @@ func TestGetAttachmentImage(t *testing.T) {
 	}
 	require.NoError(t, store.CreateAttachment(tdb.DB, att))
 
-	mux := NewMux(tdb.DB, storage, nil, nil, slog.Default(), WithDataDir(dataDir))
+	mux := NewMux(tdb.DB, storage, nil, nil, slog.Default(), WithDataDir(dataDir), WithRetentionTTL(10*time.Millisecond))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/attachments/att-1/image", nil)
 	rec := httptest.NewRecorder()
@@ -1683,7 +1684,7 @@ func TestGetChatSessionIncludesAttachments(t *testing.T) {
 	}
 	require.NoError(t, store.CreateAttachment(tdb.DB, att))
 
-	mux := NewMux(tdb.DB, storage, nil, nil, slog.Default(), WithDataDir(dataDir))
+	mux := NewMux(tdb.DB, storage, nil, nil, slog.Default(), WithDataDir(dataDir), WithRetentionTTL(10*time.Millisecond))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/papers/paper-1/chats/chat-1", nil)
 	rec := httptest.NewRecorder()
@@ -1748,7 +1749,7 @@ func TestSendMessage_SearchUsesIndex(t *testing.T) {
 		},
 	}
 
-	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default())
+	mux := NewMux(tdb.DB, storage, mock, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 
 	body := `{"content":"Search for neural"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
@@ -1780,5 +1781,5 @@ func createTestPDFWithText(t *testing.T, path string, text string) {
 
 func testMuxWithChat(t *testing.T, tdb *store.TestDB, provider chat.Provider) *http.ServeMux {
 	t.Helper()
-	return NewMux(tdb.DB, pdf.NewStorage(t.TempDir()), provider, nil, slog.Default())
+	return NewMux(tdb.DB, pdf.NewStorage(t.TempDir()), provider, nil, slog.Default(), WithRetentionTTL(10*time.Millisecond))
 }
