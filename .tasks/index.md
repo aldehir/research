@@ -60,5 +60,3 @@
 - [x] 56 — Fix horizontal scrolling when zoomed into PDF `COMPLETE`
 - [x] 57 — Redesign PDF toolbar for mobile `COMPLETE`
 - [x] 58 — Remove chat bubbles from chat UI `COMPLETE`
-- [x] 59 — Allow pinch gestures to zoom in PDF viewer `COMPLETE`
-- [ ] 60 — Full-screen mobile chat and vertical-optimized LLM formatting `TODO`

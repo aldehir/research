@@ -8,7 +8,6 @@
 	import { renderPage, renderAnnotations, clearPage, getPageDimensions, PDF_TO_CSS_UNITS } from '$lib/pdf-render';
 	import { computeScrollAnchor, restoreScrollTop } from '$lib/pdf-scroll';
 	import { getScrollDelta, shouldSkipKeyHandler } from '$lib/pdf-keys';
-	import { pointerDistance, pointerMidpoint, pinchScale, type Point } from '$lib/pinch-zoom';
 	import { setCurrentPage } from '$lib/pdf-context.svelte';
 	import { extractOutline, type TocEntry } from '$lib/pdf-outline';
 	import TocPanel from '$lib/TocPanel.svelte';
@@ -427,45 +426,6 @@
 		}
 	}
 
-	// --- Pinch-to-zoom ---
-	const activePointers = new Map<number, Point>();
-	let pinchStartDistance = 0;
-	let pinchStartScale = 0;
-
-	function handlePointerDown(e: PointerEvent): void {
-		if (e.pointerType !== 'touch') return;
-		activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-		if (activePointers.size === 2) {
-			const [a, b] = [...activePointers.values()];
-			pinchStartDistance = pointerDistance(a, b);
-			pinchStartScale = scale;
-		}
-	}
-
-	function handlePointerMove(e: PointerEvent): void {
-		if (e.pointerType !== 'touch') return;
-		if (!activePointers.has(e.pointerId)) return;
-		activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-		if (activePointers.size !== 2) return;
-
-		const [a, b] = [...activePointers.values()];
-		const currentDistance = pointerDistance(a, b);
-		const newScale = pinchScale(pinchStartScale, pinchStartDistance, currentDistance);
-		if (newScale !== scale) {
-			scale = newScale;
-			isFitToWidth = false;
-			rerenderVisible();
-		}
-	}
-
-	function handlePointerUp(e: PointerEvent): void {
-		activePointers.delete(e.pointerId);
-		if (activePointers.size < 2) {
-			pinchStartDistance = 0;
-			pinchStartScale = 0;
-		}
-	}
-
 	function toggleOverflow(): void {
 		overflowOpen = !overflowOpen;
 	}
@@ -731,7 +691,7 @@
 		{/if}
 		<div class="pages-area">
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="pages-container" class:selection-active={selectionMode} bind:this={scrollContainer} onscroll={handleScroll} onwheel={selectionMode ? undefined : handleWheel} onpointerdown={handlePointerDown} onpointermove={handlePointerMove} onpointerup={handlePointerUp} onpointercancel={handlePointerUp}>
+		<div class="pages-container" class:selection-active={selectionMode} bind:this={scrollContainer} onscroll={handleScroll} onwheel={selectionMode ? undefined : handleWheel}>
 		{#if loading}
 			<p class="status">Loading PDF...</p>
 		{:else if error}
@@ -866,7 +826,6 @@
 		align-items: flex-start;
 		gap: 8px;
 		padding: 8px;
-		touch-action: pan-x pan-y;
 	}
 
 	.pages-container.selection-active {
