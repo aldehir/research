@@ -48,3 +48,5 @@ export const Copy = '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><pa
 export const Check = '<path d="M20 6 9 17l-5-5"/>';
 
 export const BoxSelect = '<path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/>';
+
+export const EllipsisVertical = '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>';

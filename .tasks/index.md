@@ -58,3 +58,4 @@
 - [x] 54 — Allow overwriting the Anthropic API URL `COMPLETE`
 - [x] 55 — Decouple chat API from Anthropic types with intermediate representation `COMPLETE`
 - [x] 56 — Fix horizontal scrolling when zoomed into PDF `COMPLETE`
+- [x] 57 — Redesign PDF toolbar for mobile `COMPLETE`

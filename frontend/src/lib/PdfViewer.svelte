@@ -17,7 +17,7 @@
 	import { extractRegion } from '$lib/api';
 	import { addAttachment } from '$lib/attachments.svelte';
 	import RegionSelect from '$lib/RegionSelect.svelte';
-	import { Icon, List, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Maximize2, BoxSelect } from '$lib/icons';
+	import { Icon, List, ChevronLeft, ChevronRight, ZoomOut, ZoomIn, Maximize2, BoxSelect, EllipsisVertical } from '$lib/icons';
 
 	pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -76,6 +76,7 @@
 	let tocVisible = $state(false);
 	let isDesktop = $state(false);
 	let selectionMode = $state(false);
+	let overflowOpen = $state(false);
 
 	let zoomDisplay = $derived(formatZoom(scale));
 	let jumpPageInput = $state('');
@@ -425,6 +426,14 @@
 		}
 	}
 
+	function toggleOverflow(): void {
+		overflowOpen = !overflowOpen;
+	}
+
+	function closeOverflow(): void {
+		overflowOpen = false;
+	}
+
 	function handleKeydown(e: KeyboardEvent): void {
 		if (shouldSkipKeyHandler(e.target as HTMLElement)) return;
 
@@ -507,6 +516,11 @@
 		return () => mql.removeEventListener('change', handler);
 	});
 
+	// Close overflow popover when switching to desktop
+	$effect(() => {
+		if (isDesktop) overflowOpen = false;
+	});
+
 	$effect(() => {
 		const id = paperId;
 		loadPdf(id);
@@ -546,56 +560,127 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="pdf-viewer" tabindex="-1">
-	<div class="toolbar">
-		<div class="toolbar-group">
-			{#if tocEntries.length > 0}
+	{#if isDesktop}
+		<div class="toolbar">
+			<div class="toolbar-group">
+				{#if tocEntries.length > 0}
+					<button
+						onclick={() => tocVisible = !tocVisible}
+						class:active={tocVisible}
+						aria-label="Table of contents"
+						title="Table of contents"
+					><Icon d={List} size={18} /></button>
+					<span class="toolbar-divider"></span>
+				{/if}
 				<button
-					onclick={() => tocVisible = !tocVisible}
-					class:active={tocVisible}
-					aria-label="Table of contents"
-					title="Table of contents"
-				><Icon d={List} size={18} /></button>
+					onclick={() => goToPage(currentPage - 1)}
+					disabled={currentPage <= 1}
+					aria-label="Previous page"
+				><Icon d={ChevronLeft} size={18} /></button>
+				<span class="page-info">{currentPage} / {totalPages}</span>
+				<button
+					onclick={() => goToPage(currentPage + 1)}
+					disabled={currentPage >= totalPages}
+					aria-label="Next page"
+				><Icon d={ChevronRight} size={18} /></button>
+				<input
+					type="text"
+					class="page-jump"
+					placeholder="Go to"
+					bind:value={jumpPageInput}
+					onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') handleJumpPage(); }}
+					aria-label="Jump to page"
+				/>
+			</div>
+			<div class="toolbar-group">
+				<button onclick={handleZoomOut} disabled={scale <= 0.25} aria-label="Zoom out"><Icon d={ZoomOut} size={18} /></button>
+				<span class="zoom-info">{zoomDisplay}</span>
+				<button onclick={handleZoomIn} disabled={scale >= 5.0} aria-label="Zoom in"><Icon d={ZoomIn} size={18} /></button>
+				<button
+					onclick={handleFitToWidth}
+					class:active={isFitToWidth}
+					aria-label="Fit to width"
+					title="Fit to width"
+				><Icon d={Maximize2} size={18} /></button>
 				<span class="toolbar-divider"></span>
-			{/if}
-			<button
-				onclick={() => goToPage(currentPage - 1)}
-				disabled={currentPage <= 1}
-				aria-label="Previous page"
-			><Icon d={ChevronLeft} size={18} /></button>
-			<span class="page-info">{currentPage} / {totalPages}</span>
-			<button
-				onclick={() => goToPage(currentPage + 1)}
-				disabled={currentPage >= totalPages}
-				aria-label="Next page"
-			><Icon d={ChevronRight} size={18} /></button>
-			<input
-				type="text"
-				class="page-jump"
-				placeholder="Go to"
-				bind:value={jumpPageInput}
-				onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') handleJumpPage(); }}
-				aria-label="Jump to page"
-			/>
+				<button
+					onclick={() => selectionMode = !selectionMode}
+					class:active={selectionMode}
+					aria-label="Select region"
+					title="Select region to attach to chat"
+				><Icon d={BoxSelect} size={18} /></button>
+			</div>
 		</div>
-		<div class="toolbar-group">
-			<button onclick={handleZoomOut} disabled={scale <= 0.25} aria-label="Zoom out"><Icon d={ZoomOut} size={18} /></button>
-			<span class="zoom-info">{zoomDisplay}</span>
-			<button onclick={handleZoomIn} disabled={scale >= 5.0} aria-label="Zoom in"><Icon d={ZoomIn} size={18} /></button>
-			<button
-				onclick={handleFitToWidth}
-				class:active={isFitToWidth}
-				aria-label="Fit to width"
-				title="Fit to width"
-			><Icon d={Maximize2} size={18} /></button>
-			<span class="toolbar-divider"></span>
-			<button
-				onclick={() => selectionMode = !selectionMode}
-				class:active={selectionMode}
-				aria-label="Select region"
-				title="Select region to attach to chat"
-			><Icon d={BoxSelect} size={18} /></button>
+	{:else}
+		<div class="toolbar mobile-toolbar">
+			<div class="toolbar-group">
+				{#if tocEntries.length > 0}
+					<button
+						onclick={() => tocVisible = !tocVisible}
+						class:active={tocVisible}
+						aria-label="Table of contents"
+						title="Table of contents"
+					><Icon d={List} size={18} /></button>
+					<span class="toolbar-divider"></span>
+				{/if}
+				<button
+					onclick={() => goToPage(currentPage - 1)}
+					disabled={currentPage <= 1}
+					aria-label="Previous page"
+				><Icon d={ChevronLeft} size={18} /></button>
+				<span class="page-info">{currentPage}/{totalPages}</span>
+				<button
+					onclick={() => goToPage(currentPage + 1)}
+					disabled={currentPage >= totalPages}
+					aria-label="Next page"
+				><Icon d={ChevronRight} size={18} /></button>
+			</div>
+			<div class="toolbar-group">
+				<button
+					onclick={() => selectionMode = !selectionMode}
+					class:active={selectionMode}
+					aria-label="Select region"
+					title="Select region to attach to chat"
+				><Icon d={BoxSelect} size={18} /></button>
+				<div class="overflow-anchor">
+					<button
+						onclick={toggleOverflow}
+						class:active={overflowOpen}
+						aria-label="More tools"
+						title="More tools"
+					><Icon d={EllipsisVertical} size={18} /></button>
+					{#if overflowOpen}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<div class="overflow-backdrop" onclick={closeOverflow}></div>
+						<div class="overflow-menu">
+							<div class="overflow-row">
+								<input
+									type="text"
+									class="page-jump"
+									placeholder="Go to page"
+									bind:value={jumpPageInput}
+									onkeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') { handleJumpPage(); closeOverflow(); } }}
+									aria-label="Jump to page"
+								/>
+							</div>
+							<div class="overflow-row">
+								<button onclick={handleZoomOut} disabled={scale <= 0.25} aria-label="Zoom out"><Icon d={ZoomOut} size={18} /></button>
+								<span class="zoom-info">{zoomDisplay}</span>
+								<button onclick={handleZoomIn} disabled={scale >= 5.0} aria-label="Zoom in"><Icon d={ZoomIn} size={18} /></button>
+								<button
+									onclick={handleFitToWidth}
+									class:active={isFitToWidth}
+									aria-label="Fit to width"
+									title="Fit to width"
+								><Icon d={Maximize2} size={18} /></button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
 		</div>
-	</div>
+	{/if}
 
 	<div class="viewer-body">
 		{#if tocVisible}
@@ -777,20 +862,58 @@
 		color: var(--color-danger);
 	}
 
-	@media (max-width: 1023px) {
-		.toolbar {
-			padding: 0.25rem 0.5rem;
-			gap: 0.5rem;
-			flex-wrap: wrap;
-		}
+	/* Mobile toolbar */
+	.mobile-toolbar {
+		padding: 0.25rem 0.5rem;
+		gap: 0.5rem;
+	}
 
-		.toolbar button {
-			min-width: 44px;
-			min-height: 44px;
-		}
+	.mobile-toolbar button {
+		min-width: 44px;
+		min-height: 44px;
+	}
 
-		.page-jump {
-			min-height: 44px;
-		}
+	.overflow-anchor {
+		position: relative;
+	}
+
+	.overflow-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 199;
+	}
+
+	.overflow-menu {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		z-index: 200;
+		margin-top: 4px;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		box-shadow: 0 4px 16px var(--color-shadow);
+		padding: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		min-width: 200px;
+	}
+
+	.overflow-row {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.overflow-menu .page-jump {
+		flex: 1;
+		width: 100%;
+		min-height: 44px;
+	}
+
+	.overflow-menu button {
+		min-width: 44px;
+		min-height: 44px;
 	}
 </style>
