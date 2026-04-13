@@ -417,7 +417,7 @@ func TestSendMessage_ToolExecutionLoop(t *testing.T) {
 			calls: [][]chat.StreamEvent{
 				// First call: model wants to search
 				{
-					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "search_pdf", Input: json.RawMessage(`{"keywords":["attention"]}`)}},
+					{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "search_pdf", Input: json.RawMessage(`{"query":"attention"}`)}},
 					{Kind: chat.EventDone},
 				},
 				// Second call (after tool result): model gives final answer
@@ -1779,7 +1779,7 @@ func TestSendMessage_SearchUsesIndex(t *testing.T) {
 	mock := &multiTurnStreamer{
 		calls: [][]chat.StreamEvent{
 			{
-				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "search_pdf", Input: json.RawMessage(`{"keywords":["neural"]}`)}},
+				{Kind: chat.EventToolCall, ToolCall: &chat.ToolCall{ID: "toolu_1", Name: "search_pdf", Input: json.RawMessage(`{"query":"neural"}`)}},
 				{Kind: chat.EventDone},
 			},
 			{

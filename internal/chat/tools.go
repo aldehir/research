@@ -11,14 +11,12 @@ func PDFTools() []Tool {
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
-					"keywords": {
-						"type": "array",
-						"items": {"type": "string"},
-						"maxItems": 3,
-						"description": "1-3 search keywords (e.g. [\"attention\", \"mechanism\"])"
+					"query": {
+						"type": "string",
+						"description": "Search keywords separated by spaces (e.g. \"attention mechanism\")"
 					}
 				},
-				"required": ["keywords"]
+				"required": ["query"]
 			}`),
 		},
 		{

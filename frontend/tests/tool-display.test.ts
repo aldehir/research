@@ -25,7 +25,7 @@ describe('formatToolLabel', () => {
 
 describe('formatToolArgs', () => {
 	it('formats search_pdf query', () => {
-		expect(formatToolArgs('search_pdf', { keywords: ['attention', 'mechanism'] })).toBe('"attention", "mechanism"');
+		expect(formatToolArgs('search_pdf', { query: 'attention mechanism' })).toBe('"attention mechanism"');
 	});
 
 	it('formats read_page page number', () => {

@@ -529,19 +529,20 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) to
 	switch name {
 	case "search_pdf":
 		var args struct {
-			Keywords []string `json:"keywords"`
+			Query string `json:"query"`
 		}
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
 			return textResult(fmt.Sprintf("Error parsing arguments: %v", err))
 		}
-		if len(args.Keywords) == 0 {
-			return textResult("No keywords provided.")
+		if args.Query == "" {
+			return textResult("No query provided.")
 		}
+		keywords := strings.Fields(args.Query)
 
 		// Try FTS5 index first — join keywords with OR for broader matching
 		if tc.db != nil && tc.paperID != "" {
-			query := strings.Join(args.Keywords, " OR ")
-			results, err := store.SearchPageText(tc.db, tc.paperID, query)
+			ftsQuery := strings.Join(keywords, " OR ")
+			results, err := store.SearchPageText(tc.db, tc.paperID, ftsQuery)
 			if err == nil && len(results) > 0 {
 				b, _ := json.Marshal(results)
 				return textResult(string(b))
@@ -549,7 +550,7 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) to
 		}
 
 		// Fall back to pdftotext — search each keyword independently
-		results, err := pdf.SearchTextMulti(tc.pdfPath, args.Keywords)
+		results, err := pdf.SearchTextMulti(tc.pdfPath, keywords)
 		if err != nil {
 			logger.Warn("search_pdf failed", "error", err)
 			return textResult(fmt.Sprintf("Error searching PDF: %v", err))
