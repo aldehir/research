@@ -208,7 +208,7 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 			if paper.PageCount != nil {
 				totalPages = *paper.PageCount
 			}
-			if paper.OutlineJSON != nil {
+			if paper.OutlineJSON != nil && os.Getenv("RESEARCH_OUTLINE_PROMPT") != "" {
 				var entries []pdf.OutlineEntry
 				if err := json.Unmarshal([]byte(*paper.OutlineJSON), &entries); err == nil {
 					outline = pdf.FormatOutline(entries)
