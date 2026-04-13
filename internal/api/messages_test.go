@@ -1175,6 +1175,47 @@ func TestSendMessage_WithAttachments(t *testing.T) {
 		assert.True(t, hasImage, "should have image part")
 	})
 
+	t.Run("image-only message with empty content succeeds", func(t *testing.T) {
+		tdb := store.NewTestDB(t)
+		seedChatSession(t, tdb)
+
+		mock := &captureStreamer{
+			mockStreamer: mockStreamer{
+				events: []chat.StreamEvent{
+					{Kind: chat.EventDelta, Text: "I see an image"},
+					{Kind: chat.EventDone},
+				},
+			},
+		}
+		mux := testMuxWithChat(t, tdb, mock)
+
+		body := `{"content":"","attachments":[{"image_data":"aWdub3Jl","text":"","page":0}]}`
+		req := httptest.NewRequest(http.MethodPost, "/api/papers/paper-1/chats/chat-1/messages", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		require.NotNil(t, mock.captured)
+
+		lastMsg := mock.captured.Messages[len(mock.captured.Messages)-1]
+		require.NotEmpty(t, lastMsg.Parts)
+
+		var hasText, hasImage bool
+		for _, part := range lastMsg.Parts {
+			if part.Kind == chat.PartText {
+				hasText = true
+			}
+			if part.Kind == chat.PartImage {
+				hasImage = true
+				require.NotNil(t, part.Image)
+				assert.Equal(t, "aWdub3Jl", part.Image.Data)
+			}
+		}
+		assert.False(t, hasText, "should not have empty text part")
+		assert.True(t, hasImage, "should have image part")
+	})
+
 	t.Run("message without attachments works as before", func(t *testing.T) {
 		tdb := store.NewTestDB(t)
 		seedChatSession(t, tdb)

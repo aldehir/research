@@ -56,8 +56,8 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 			return
 		}
 
-		if body.Content == "" {
-			writeError(w, http.StatusBadRequest, "content is required", logger)
+		if body.Content == "" && len(body.Attachments) == 0 {
+			writeError(w, http.StatusBadRequest, "content or attachments required", logger)
 			return
 		}
 
@@ -423,13 +423,15 @@ func buildMultimodalUserMessage(content string, attachments []attachment) chat.M
 	textContent.WriteString(content)
 	for _, att := range attachments {
 		if att.Text != "" {
-			textContent.WriteString(fmt.Sprintf("\n\n[Attached region from page %d]\n%s", att.Page, att.Text))
+			fmt.Fprintf(&textContent, "\n\n[Attached region from page %d]\n%s", att.Page, att.Text)
 		}
 	}
-	parts = append(parts, chat.Part{
-		Kind: chat.PartText,
-		Text: textContent.String(),
-	})
+	if textContent.Len() > 0 {
+		parts = append(parts, chat.Part{
+			Kind: chat.PartText,
+			Text: textContent.String(),
+		})
+	}
 
 	for _, att := range attachments {
 		if att.ImageData != "" {
