@@ -7,16 +7,18 @@ func PDFTools() []Tool {
 	return []Tool{
 		{
 			Name:        "search_pdf",
-			Description: "Search the document using keyword matching. Use sparse individual keywords, not full phrases or sentences — the search engine is keyword-based (e.g. 'attention mechanism' not 'how does the attention mechanism work'). Returns matching page numbers and text snippets.",
+			Description: "Search the document by keywords. Returns matching page numbers and snippets.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
-					"query": {
-						"type": "string",
-						"description": "Keywords to search for (use sparse keywords, not full phrases)"
+					"keywords": {
+						"type": "array",
+						"items": {"type": "string"},
+						"maxItems": 3,
+						"description": "1-3 search keywords (e.g. [\"attention\", \"mechanism\"])"
 					}
 				},
-				"required": ["query"]
+				"required": ["keywords"]
 			}`),
 		},
 		{

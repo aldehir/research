@@ -14,16 +14,18 @@ func PDFTools() []Tool {
 	return []Tool{
 		{
 			Name:        "search_pdf",
-			Description: "Search the PDF document for a text query. Returns matching page numbers and text snippets.",
+			Description: "Search the document by keywords. Returns matching page numbers and snippets.",
 			InputSchema: json.RawMessage(`{
 				"type": "object",
 				"properties": {
-					"query": {
-						"type": "string",
-						"description": "The text to search for in the document"
+					"keywords": {
+						"type": "array",
+						"items": {"type": "string"},
+						"maxItems": 3,
+						"description": "1-3 search keywords (e.g. [\"attention\", \"mechanism\"])"
 					}
 				},
-				"required": ["query"]
+				"required": ["keywords"]
 			}`),
 		},
 		{

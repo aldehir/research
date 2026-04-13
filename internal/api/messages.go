@@ -522,23 +522,27 @@ func executeToolCall(name, input string, tc toolContext, logger *slog.Logger) to
 	switch name {
 	case "search_pdf":
 		var args struct {
-			Query string `json:"query"`
+			Keywords []string `json:"keywords"`
 		}
 		if err := json.Unmarshal([]byte(input), &args); err != nil {
 			return textResult(fmt.Sprintf("Error parsing arguments: %v", err))
 		}
+		if len(args.Keywords) == 0 {
+			return textResult("No keywords provided.")
+		}
 
-		// Try FTS5 index first
+		// Try FTS5 index first — join keywords with OR for broader matching
 		if tc.db != nil && tc.paperID != "" {
-			results, err := store.SearchPageText(tc.db, tc.paperID, args.Query)
+			query := strings.Join(args.Keywords, " OR ")
+			results, err := store.SearchPageText(tc.db, tc.paperID, query)
 			if err == nil && len(results) > 0 {
 				b, _ := json.Marshal(results)
 				return textResult(string(b))
 			}
 		}
 
-		// Fall back to pdftotext
-		results, err := pdf.SearchText(tc.pdfPath, args.Query)
+		// Fall back to pdftotext — search each keyword independently
+		results, err := pdf.SearchTextMulti(tc.pdfPath, args.Keywords)
 		if err != nil {
 			logger.Warn("search_pdf failed", "error", err)
 			return textResult(fmt.Sprintf("Error searching PDF: %v", err))

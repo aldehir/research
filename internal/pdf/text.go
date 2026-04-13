@@ -74,32 +74,43 @@ func ExtractRegionText(path string, pageNum, x, y, w, h int) (string, error) {
 // SearchText searches all pages of a PDF for the given query string.
 // Returns matching pages with text snippets.
 func SearchText(path string, query string) ([]SearchResult, error) {
+	return SearchTextMulti(path, []string{query})
+}
+
+// SearchTextMulti searches all pages of a PDF for any of the given keywords.
+// A page is included if it matches at least one keyword.
+func SearchTextMulti(path string, keywords []string) ([]SearchResult, error) {
 	count, err := PageCount(path)
 	if err != nil {
 		return nil, err
 	}
 
-	// Extract all text at once for search
 	out, err := exec.Command("pdftotext", "-layout", path, "-").Output()
 	if err != nil {
 		return nil, fmt.Errorf("pdftotext: %w", err)
 	}
 
-	// pdftotext separates pages with form feed (\f)
+	lowered := make([]string, len(keywords))
+	for i, kw := range keywords {
+		lowered[i] = strings.ToLower(kw)
+	}
+
 	pages := strings.Split(string(out), "\f")
-	queryLower := strings.ToLower(query)
 	var results []SearchResult
 
 	for i := 0; i < len(pages) && i < count; i++ {
 		pageText := pages[i]
-		if idx := strings.Index(strings.ToLower(pageText), queryLower); idx >= 0 {
-			start := max(0, idx-50)
-			end := min(len(pageText), idx+len(query)+50)
-			snippet := pageText[start:end]
-			results = append(results, SearchResult{
-				Page:    i + 1,
-				Snippet: strings.TrimSpace(snippet),
-			})
+		pageLower := strings.ToLower(pageText)
+		for _, kw := range lowered {
+			if idx := strings.Index(pageLower, kw); idx >= 0 {
+				start := max(0, idx-50)
+				end := min(len(pageText), idx+len(kw)+50)
+				results = append(results, SearchResult{
+					Page:    i + 1,
+					Snippet: strings.TrimSpace(pageText[start:end]),
+				})
+				break
+			}
 		}
 	}
 

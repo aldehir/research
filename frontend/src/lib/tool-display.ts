@@ -11,8 +11,10 @@ export function formatToolLabel(name: string): string {
 
 export function formatToolArgs(name: string, args: Record<string, unknown>): string {
 	switch (name) {
-		case 'search_pdf':
-			return `"${args.query}"`;
+		case 'search_pdf': {
+			const kws = args.keywords as string[];
+			return kws.map((k) => `"${k}"`).join(', ');
+		}
 		case 'read_page':
 		case 'go_to_page':
 		case 'snapshot_page':
