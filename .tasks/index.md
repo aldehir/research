@@ -62,3 +62,5 @@
 - [x] 58 — Remove chat bubbles from chat UI `COMPLETE`
 - [x] 60 — Full-screen mobile chat and vertical-optimized LLM formatting `COMPLETE`
 - [x] 61 — Background support for chat streaming `COMPLETE`
+- [x] 62 — Paste and drop images into chat `COMPLETE`
+- [ ] 63 — Update search prompt to use sparse keywords `TODO`

@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { getIsStreaming, sendChatMessage, getActiveSessionId } from '$lib/chat.svelte';
 	import { getCurrentPage } from '$lib/pdf-context.svelte';
-	import { getPendingAttachments, removeAttachment, consumeAttachments } from '$lib/attachments.svelte';
+	import { getPendingAttachments, removeAttachment, consumeAttachments, addAttachment } from '$lib/attachments.svelte';
 	import type { PendingAttachment } from '$lib/attachments.svelte';
 	import { Icon, Send, X } from '$lib/icons';
+	import { resizeImage } from '$lib/resize-image';
 
 	interface Props {
 		paperId: string;
@@ -12,6 +13,7 @@
 	let { paperId }: Props = $props();
 	let inputText = $state('');
 	let modalAttachment = $state<PendingAttachment | null>(null);
+	let dragOver = $state(false);
 
 	const attachments = $derived(getPendingAttachments());
 
@@ -25,14 +27,55 @@
 	async function handleSend() {
 		const content = inputText.trim();
 		const chatId = getActiveSessionId();
-		if (!content || !chatId || getIsStreaming()) return;
+		const atts = consumeAttachments();
+		if ((!content && atts.length === 0) || !chatId || getIsStreaming()) return;
 
 		const currentPage = getCurrentPage();
-		const atts = consumeAttachments();
 
 		inputText = '';
 
 		await sendChatMessage(paperId, chatId, content, currentPage, atts.length > 0 ? atts : undefined);
+	}
+
+	async function addImageBlob(blob: Blob) {
+		const base64 = await resizeImage(blob);
+		addAttachment({ image_data: base64, text: '', page: 0 });
+	}
+
+	function handlePaste(event: ClipboardEvent) {
+		const items = event.clipboardData?.items;
+		if (!items) return;
+		for (const item of items) {
+			if (item.type.startsWith('image/')) {
+				event.preventDefault();
+				const blob = item.getAsFile();
+				if (blob) addImageBlob(blob);
+				return;
+			}
+		}
+	}
+
+	function handleDragOver(event: DragEvent) {
+		if (event.dataTransfer?.types.includes('Files')) {
+			event.preventDefault();
+			dragOver = true;
+		}
+	}
+
+	function handleDragLeave() {
+		dragOver = false;
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		dragOver = false;
+		const files = event.dataTransfer?.files;
+		if (!files) return;
+		for (const file of files) {
+			if (file.type.startsWith('image/')) {
+				addImageBlob(file);
+			}
+		}
 	}
 
 	function closeModal() {
@@ -52,14 +95,20 @@
 	}
 </script>
 
-<div class="input-area">
+<div
+	class="input-area"
+	class:drag-over={dragOver}
+	ondragover={handleDragOver}
+	ondragleave={handleDragLeave}
+	ondrop={handleDrop}
+>
 	{#if attachments.length > 0}
 		<div class="attachment-strip">
 			{#each attachments as att (att.id)}
 				<div class="attachment-thumb">
 					<button class="thumb-preview" onclick={() => modalAttachment = att}>
-						<img src="data:image/png;base64,{att.image_data}" alt="Region from page {att.page}" />
-						<span class="thumb-label">p.{att.page}</span>
+						<img src="data:image/png;base64,{att.image_data}" alt={att.page ? `Region from page ${att.page}` : 'Pasted image'} />
+						<span class="thumb-label">{att.page ? `p.${att.page}` : 'Pasted'}</span>
 					</button>
 					<button class="thumb-dismiss" onclick={() => removeAttachment(att.id)} aria-label="Remove attachment">
 						<Icon d={X} size={12} />
@@ -74,12 +123,13 @@
 			placeholder={getActiveSessionId() ? 'Type a message...' : 'Select or create a chat first'}
 			disabled={getIsStreaming() || !getActiveSessionId()}
 			onkeydown={handleKeydown}
+			onpaste={handlePaste}
 			rows="2"
 		></textarea>
 		<button
 			class="send-btn"
 			onclick={handleSend}
-			disabled={getIsStreaming() || !inputText.trim() || !getActiveSessionId()}
+			disabled={getIsStreaming() || !getActiveSessionId() || (!inputText.trim() && attachments.length === 0)}
 		>
 			<Icon d={Send} size={16} />
 		</button>
@@ -91,13 +141,13 @@
 	<div class="modal-backdrop" onclick={handleBackdropClick} onkeydown={handleModalKeydown}>
 		<div class="modal-content">
 			<div class="modal-header">
-				<span class="modal-title">Region from page {modalAttachment.page}</span>
+				<span class="modal-title">{modalAttachment.page ? `Region from page ${modalAttachment.page}` : 'Pasted image'}</span>
 				<button class="modal-close" onclick={closeModal} aria-label="Close">
 					<Icon d={X} size={18} />
 				</button>
 			</div>
 			<div class="modal-body">
-				<img src="data:image/png;base64,{modalAttachment.image_data}" alt="Region from page {modalAttachment.page}" />
+				<img src="data:image/png;base64,{modalAttachment.image_data}" alt={modalAttachment.page ? `Region from page ${modalAttachment.page}` : 'Pasted image'} />
 				{#if modalAttachment.text}
 					<pre class="modal-text">{modalAttachment.text}</pre>
 				{/if}
@@ -110,6 +160,13 @@
 	.input-area {
 		border-top: 1px solid var(--color-border);
 		padding: 0.75rem;
+		transition: background 0.15s;
+	}
+
+	.input-area.drag-over {
+		background: var(--color-surface-hover);
+		outline: 2px dashed var(--color-primary);
+		outline-offset: -2px;
 	}
 
 	.input-row {
