@@ -18,6 +18,7 @@ type Paper struct {
 	Subject       *string `json:"subject,omitempty"`
 	PublishedDate *string `json:"published_date,omitempty"`
 	PageCount     *int    `json:"page_count,omitempty"`
+	OutlineJSON   *string `json:"outline_json,omitempty"`
 	LastReadPage  *int    `json:"last_read_page,omitempty"`
 	CreatedAt     string  `json:"created_at"`
 }
@@ -25,16 +26,16 @@ type Paper struct {
 // CreatePaper inserts a new paper record.
 func CreatePaper(db *sql.DB, p Paper) error {
 	_, err := db.Exec(
-		`INSERT INTO papers (id, title, file_path, file_size, author, subject, published_date, page_count, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Title, p.FilePath, p.FileSize, p.Author, p.Subject, p.PublishedDate, p.PageCount, p.CreatedAt,
+		`INSERT INTO papers (id, title, file_path, file_size, author, subject, published_date, page_count, outline_json, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Title, p.FilePath, p.FileSize, p.Author, p.Subject, p.PublishedDate, p.PageCount, p.OutlineJSON, p.CreatedAt,
 	)
 	return err
 }
 
 // ListPapers returns all papers ordered by created_at descending.
 func ListPapers(db *sql.DB) ([]Paper, error) {
-	rows, err := db.Query(`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, last_read_page, created_at FROM papers ORDER BY created_at DESC`)
+	rows, err := db.Query(`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, outline_json, last_read_page, created_at FROM papers ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func ListPapers(db *sql.DB) ([]Paper, error) {
 	var papers []Paper
 	for rows.Next() {
 		var p Paper
-		if err := rows.Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.LastReadPage, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.OutlineJSON, &p.LastReadPage, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		papers = append(papers, p)
@@ -55,8 +56,8 @@ func ListPapers(db *sql.DB) ([]Paper, error) {
 func GetPaper(db *sql.DB, id string) (Paper, error) {
 	var p Paper
 	err := db.QueryRow(
-		`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, last_read_page, created_at FROM papers WHERE id = ?`, id,
-	).Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.LastReadPage, &p.CreatedAt)
+		`SELECT id, title, file_path, file_size, author, subject, published_date, page_count, outline_json, last_read_page, created_at FROM papers WHERE id = ?`, id,
+	).Scan(&p.ID, &p.Title, &p.FilePath, &p.FileSize, &p.Author, &p.Subject, &p.PublishedDate, &p.PageCount, &p.OutlineJSON, &p.LastReadPage, &p.CreatedAt)
 	return p, err
 }
 
@@ -66,13 +67,14 @@ type PaperMetadata struct {
 	Subject       *string
 	PublishedDate *string
 	PageCount     *int
+	OutlineJSON   *string
 }
 
 // UpdatePaperMetadata updates the metadata columns of a paper.
 func UpdatePaperMetadata(db *sql.DB, id string, m PaperMetadata) error {
 	_, err := db.Exec(
-		`UPDATE papers SET author = ?, subject = ?, published_date = ?, page_count = ? WHERE id = ?`,
-		m.Author, m.Subject, m.PublishedDate, m.PageCount, id,
+		`UPDATE papers SET author = ?, subject = ?, published_date = ?, page_count = ?, outline_json = ? WHERE id = ?`,
+		m.Author, m.Subject, m.PublishedDate, m.PageCount, m.OutlineJSON, id,
 	)
 	return err
 }

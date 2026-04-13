@@ -194,7 +194,7 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 		}
 
 		// Look up paper metadata for prompt context
-		var docTitle, docAuthor, docDate, pdfPath string
+		var docTitle, docAuthor, docDate, pdfPath, outline string
 		var totalPages int
 		if paper, err := store.GetPaper(db, paperID); err == nil {
 			docTitle = paper.Title
@@ -208,6 +208,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 			if paper.PageCount != nil {
 				totalPages = *paper.PageCount
 			}
+			if paper.OutlineJSON != nil {
+				var entries []pdf.OutlineEntry
+				if err := json.Unmarshal([]byte(*paper.OutlineJSON), &entries); err == nil {
+					outline = pdf.FormatOutline(entries)
+				}
+			}
 		}
 
 		// Build request
@@ -217,6 +223,7 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 				DocumentAuthor: docAuthor,
 				DocumentDate:   docDate,
 				TotalPages:     totalPages,
+				Outline:        outline,
 			}),
 			Messages: chatMessages,
 			Tools:    chat.PDFTools(),

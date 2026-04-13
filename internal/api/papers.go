@@ -115,11 +115,24 @@ func handleUploadPaper(db *sql.DB, storage *pdf.Storage, logger *slog.Logger) ht
 				paper.Title = meta.Title
 				db.Exec(`UPDATE papers SET title = ? WHERE id = ?`, meta.Title, id)
 			}
+
+			// Best-effort outline extraction
+			if outline, err := pdf.ExtractOutline(path); err == nil && len(outline) > 0 {
+				if outlineBytes, err := json.Marshal(outline); err == nil {
+					s := string(outlineBytes)
+					m.OutlineJSON = &s
+					logger.Info("pdf outline extracted", "id", id, "entries", len(outline))
+				}
+			} else if err != nil {
+				logger.Warn("pdf outline extraction failed", "id", id, "error", err)
+			}
+
 			store.UpdatePaperMetadata(db, id, m)
 			paper.Author = m.Author
 			paper.Subject = m.Subject
 			paper.PublishedDate = m.PublishedDate
 			paper.PageCount = m.PageCount
+			paper.OutlineJSON = m.OutlineJSON
 		} else {
 			logger.Warn("pdf metadata extraction failed", "id", id, "error", err)
 		}

@@ -64,3 +64,4 @@
 - [x] 61 — Background support for chat streaming `COMPLETE`
 - [x] 62 — Paste and drop images into chat `COMPLETE`
 - [x] 63 — Update search prompt to use sparse keywords `COMPLETE`
+- [ ] 64 — Include PDF outline in system prompt `COMPLETE`

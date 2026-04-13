@@ -23,6 +23,7 @@ type PromptContext struct {
 	DocumentAuthor string
 	DocumentDate   string
 	TotalPages     int
+	Outline        string // pre-formatted outline text; omitted from prompt if empty
 }
 
 // BuildSystemPrompt generates the system prompt from document context.
@@ -49,6 +50,11 @@ func BuildSystemPrompt(ctx PromptContext) string {
 
 	if ctx.TotalPages > 0 {
 		fmt.Fprintf(&b, "\nThe document has %d pages.", ctx.TotalPages)
+	}
+
+	if ctx.Outline != "" {
+		b.WriteString("\n\nDocument outline:\n")
+		b.WriteString(ctx.Outline)
 	}
 
 	return b.String()
