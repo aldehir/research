@@ -55,7 +55,8 @@ func TestBuildSystemPrompt_WithOutline(t *testing.T) {
 		TotalPages:    10,
 		Outline:       "- Chapter 1 (p. 1)\n  - Section 1.1 (p. 3)\n- Chapter 2 (p. 7)",
 	})
-	assert.Contains(t, prompt, "Document outline:")
+	assert.Contains(t, prompt, "Document outline")
+	assert.Contains(t, prompt, "read_page or search_pdf")
 	assert.Contains(t, prompt, "- Chapter 1 (p. 1)")
 	assert.Contains(t, prompt, "  - Section 1.1 (p. 3)")
 }
@@ -64,5 +65,5 @@ func TestBuildSystemPrompt_OmitsOutlineWhenEmpty(t *testing.T) {
 	prompt := BuildSystemPrompt(PromptContext{
 		DocumentTitle: "Test Doc",
 	})
-	assert.NotContains(t, prompt, "Document outline:")
+	assert.NotContains(t, prompt, "Document outline")
 }

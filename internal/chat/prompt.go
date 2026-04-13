@@ -53,7 +53,7 @@ func BuildSystemPrompt(ctx PromptContext) string {
 	}
 
 	if ctx.Outline != "" {
-		b.WriteString("\n\nDocument outline:\n")
+		b.WriteString("\n\nDocument outline (use this for navigation — always read_page or search_pdf to get actual content):\n")
 		b.WriteString(ctx.Outline)
 	}
 
