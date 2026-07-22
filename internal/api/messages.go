@@ -219,11 +219,12 @@ func handleSendMessage(db *sql.DB, storage *pdf.Storage, provider chat.Provider,
 		// Build request
 		req := chat.Request{
 			SystemPrompt: chat.BuildSystemPrompt(chat.PromptContext{
-				DocumentTitle:  docTitle,
-				DocumentAuthor: docAuthor,
-				DocumentDate:   docDate,
-				TotalPages:     totalPages,
-				Outline:        outline,
+				DocumentTitle:      docTitle,
+				DocumentAuthor:     docAuthor,
+				DocumentDate:       docDate,
+				TotalPages:         totalPages,
+				Outline:            outline,
+				CustomInstructions: os.Getenv("RESEARCH_INSTRUCTIONS"),
 			}),
 			Messages: chatMessages,
 			Tools:    chat.PDFTools(),

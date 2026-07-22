@@ -19,11 +19,12 @@ Guidelines:
 
 // PromptContext holds document metadata for system prompt generation.
 type PromptContext struct {
-	DocumentTitle  string
-	DocumentAuthor string
-	DocumentDate   string
-	TotalPages     int
-	Outline        string // pre-formatted outline text; omitted from prompt if empty
+	DocumentTitle      string
+	DocumentAuthor     string
+	DocumentDate       string
+	TotalPages         int
+	Outline            string // pre-formatted outline text; omitted from prompt if empty
+	CustomInstructions string // user-provided instructions appended to the prompt
 }
 
 // BuildSystemPrompt generates the system prompt from document context.
@@ -55,6 +56,11 @@ func BuildSystemPrompt(ctx PromptContext) string {
 	if ctx.Outline != "" {
 		b.WriteString("\n\nDocument outline (use this for navigation — always read_page or search_pdf to get actual content):\n")
 		b.WriteString(ctx.Outline)
+	}
+
+	if ctx.CustomInstructions != "" {
+		b.WriteString("\n\nCustom instructions from the user:\n")
+		b.WriteString(ctx.CustomInstructions)
 	}
 
 	return b.String()

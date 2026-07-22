@@ -67,3 +67,17 @@ func TestBuildSystemPrompt_OmitsOutlineWhenEmpty(t *testing.T) {
 	})
 	assert.NotContains(t, prompt, "Document outline")
 }
+
+func TestBuildSystemPrompt_WithCustomInstructions(t *testing.T) {
+	prompt := BuildSystemPrompt(PromptContext{
+		DocumentTitle:      "Test Doc",
+		CustomInstructions: "Always respond in French. Focus on mathematical proofs.",
+	})
+	assert.Contains(t, prompt, "Custom instructions")
+	assert.Contains(t, prompt, "Always respond in French. Focus on mathematical proofs.")
+}
+
+func TestBuildSystemPrompt_OmitsCustomInstructionsWhenEmpty(t *testing.T) {
+	prompt := BuildSystemPrompt(PromptContext{})
+	assert.NotContains(t, prompt, "Custom instructions")
+}
