@@ -3,17 +3,17 @@
 A self-hosted web app for reading research papers with Claude at your side.
 Upload PDFs, read them in the browser, select a passage, and ask questions
 about what you're reading. Everything runs from a single server binary on your
-own machine — no accounts, no cloud storage.
+own machine, with no accounts and no cloud storage.
 
 ## Features
 
-- **Personal library** — upload papers by drag-and-drop and access them from
+- **Personal library**: upload papers by drag-and-drop and access them from
   any device on your network.
-- **In-browser reading** — full PDF rendering with text selection, zoom, and
+- **In-browser reading**: full PDF rendering with text selection, zoom, and
   page navigation.
-- **Chat with Claude** — ask questions about the paper; selected passages and
+- **Chat with Claude**: ask questions about the paper; selected passages and
   surrounding context are sent along for better answers.
-- **Local storage** — papers live on your filesystem and metadata in a SQLite
+- **Local storage**: papers live on your filesystem and metadata in a SQLite
   file, so backup is just copying files.
 
 ## Requirements
@@ -25,7 +25,7 @@ To build the app you need:
 
 To run the server you need these command-line tools installed:
 
-- `pdftotext` and `pdftoppm` — part of [Poppler](https://poppler.freedesktop.org/)
+- `pdftotext` and `pdftoppm`, part of [Poppler](https://poppler.freedesktop.org/)
   (`poppler-utils` on most Linux distributions, `poppler` on Homebrew)
 - [`qpdf`](https://qpdf.sourceforge.io/)
 
@@ -60,7 +60,7 @@ Then open <http://localhost:8080> in your browser. On first run the server
 creates a `research.db` database file and a `./data` directory for your PDFs
 in the current directory.
 
-Without an API key the app still works as a PDF reader — only chat is
+Without an API key the app still works as a PDF reader; only chat is
 disabled.
 
 ## Configuration
@@ -86,4 +86,4 @@ Run `./research-server --help` for the full list of flags.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
