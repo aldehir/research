@@ -23,6 +23,12 @@ To build the app you need:
 - [Go](https://go.dev/) 1.25 or newer
 - [Node.js](https://nodejs.org/) with [pnpm](https://pnpm.io/)
 
+To run the server you need these command-line tools installed:
+
+- `pdftotext` and `pdftoppm` — part of [Poppler](https://poppler.freedesktop.org/)
+  (`poppler-utils` on most Linux distributions, `poppler` on Homebrew)
+- [`qpdf`](https://qpdf.sourceforge.io/)
+
 To use the chat features you also need an
 [Anthropic API key](https://console.anthropic.com/).
 
@@ -78,8 +84,6 @@ Chat behavior is controlled with environment variables:
 
 Run `./research-server --help` for the full list of flags.
 
-## A note on privacy
+## License
 
-Your papers never leave your machine except when you chat: the passages and
-pages relevant to your question are sent to the Anthropic API to generate
-answers.
+MIT — see [LICENSE](LICENSE).
