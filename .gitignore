@@ -2,6 +2,14 @@
 /server
 /research-server
 
+# Local data
+research.db
+/data/
+/output.txt
+/_ref/
+__pycache__/
+.env
+
 # Frontend
 frontend/node_modules/
 frontend/.svelte-kit/
